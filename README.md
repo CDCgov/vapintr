@@ -12,8 +12,8 @@ status](https://www.r-pkg.org/badges/version/sword)](https://CRAN.R-project.org/
 stable](https://lifecycle.r-lib.org/articles/figures/lifecycle-stable.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 <!-- badges: end -->
 
-<!-- [![Travis-CI Build Status](https://travis-ci.org/cont-limno/LAGOSNE.svg?branch=master)](https://travis-ci.org/cont-limno/LAGOSNE) [![CRAN\_Status\_Badge](http://www.r-pkg.org/badges/version/LAGOSNE)](https://cran.r-project.org/package=LAGOSNE) [![CRAN RStudio mirror downloads](http://cranlogs.r-pkg.org/badges/LAGOSNE)](https://cran.r-project.org/package=LAGOSNE)
-[![Codecov test coverage](https://codecov.io/gh/tidyverse/dplyr/branch/master/graph/badge.svg)](https://codecov.io/gh/tidyverse/dplyr?branch=master)-->
+<!-- [![Travis-CI Build Status](https://travis-ci.org/cont-limno/LAGOSNE.svg?branch=main)](https://travis-ci.org/cont-limno/LAGOSNE) [![CRAN\_Status\_Badge](http://www.r-pkg.org/badges/version/LAGOSNE)](https://cran.r-project.org/package=LAGOSNE) [![CRAN RStudio mirror downloads](http://cranlogs.r-pkg.org/badges/LAGOSNE)](https://cran.r-project.org/package=LAGOSNE)
+[![Codecov test coverage](https://codecov.io/gh/tidyverse/dplyr/branch/main/graph/badge.svg)](https://codecov.io/gh/tidyverse/dplyr?branch=main)-->
 
 # vapintr
 
@@ -66,7 +66,7 @@ combine the results of the two analysis for comparison purposes.
 To install vapintr:
 
 ``` r
-devtools::install_git("https://github.com/CDCgov/vapintr", ref = "master", build_vignettes = TRUE, build_manual = TRUE)
+devtools::install_git("https://github.com/CDCgov/vapintr", ref = "main", build_vignettes = TRUE, build_manual = TRUE)
 ```
 
 ## Public Domain Standard Notice
@@ -106,9 +106,9 @@ license.
 
 This repository contains only non-sensitive, publicly available data and
 information. All material and community participation is covered by the
-[Disclaimer](https://github.com/CDCgov/vapintr/blob/master/DISCLAIMER.md)
+[Disclaimer](https://github.com/CDCgov/vapintr/blob/main/DISCLAIMER.md)
 and [Code of
-Conduct](https://github.com/CDCgov/vapintr/blob/master/code-of-conduct.md).
+Conduct](https://github.com/CDCgov/vapintr/blob/main/code-of-conduct.md).
 For more information about CDC’s privacy policy, please visit
 [http://www.cdc.gov/other/privacy.html](https://www.cdc.gov/other/privacy.html).
 
