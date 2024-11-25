@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<!DOCTYPE html>
+<html lang="en-us" class="theme-teal cdc-page-type-home"><head>
+
+<!-- Global / universal meta tags -->
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+<meta content="width=device-width, initial-scale=1, shrink-to-fit=no" name="viewport">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<link rel="shortcut icon" href="www/favicon.ico">
+<link rel="stylesheet prefetch" href="www/css/atsdr/bootstrap.min.css">
+<link rel="stylesheet prefetch" href="www/css/atsdr/app.min.css">
+<!-- hz print.min.css has some conflicts with Shiny built-in CSS so removed from folder -->
+
+<title>ATSDR Vapor Intrusion Simulation Tool</title>
+<meta name="description" content="The Agency for Toxic Substances and Disease Registry (ATSDR), based in Atlanta, Georgia, is a federal public health agency of the U.S. Department of Health and Human Services. ATSDR serves the public by using the best science, taking responsive public health actions, and providing trusted health information to prevent harmful exposures and diseases related to toxic substances.">
+<meta name="keywords" content="Agency for Toxic Substances and Disease Registry,  ATSDR,  Toxic Substances,  TSP,  PHA,  Emergency Response, Toxic Substances ">
+<meta property="cdc:content_id" content="75997">
+<link rel="canonical" href="https://www.atsdr.cdc.gov/index.html">
+<!-- CSS Added Dynamically Here -->
+<link rel="stylesheet" href="www/css/main.css">
+<meta name="DC.date" content="2021-05-05T04:12:23Z">
+
+</head>
+
+  <body class="js" cz-shortcut-listen="true">
+	<div id="skipmenu">
+		<a class="skippy sr-only-focusable" href="#content">Skip directly to site content</a>
+			<a class="skippy sr-only-focusable" href="#share-nav">Skip directly to page options</a>
+		<a class="skippy sr-only-focusable" href="#az-large">Skip directly to A-Z link</a>
+	</div>
+
+	<div class="container-fluid header-wrapper">
+		<div class="container">
+			<header role="banner" aria-label="Header" class="pt-2 pb-2">
+				<div class="row">
+					<div class="col cdc-logo">
+						<a href="https://www.atsdr.cdc.gov">
+							<img src="www/images/ATSDR-logo.png" alt="ATSDR logo" />
+						</a>
+					</div>
+				</div>
+			</header>
+		</div>
+	</div>
+
+	<div class="container-fluid site-title">
+		<div class="container">
+			<div class="syndicate">
+			    <div class="row">
+  					<div class="col">
+  						<div class="display-6 text-white fw-500 pt-1 pb-1 ">
+  							<a href="www/index.html">ATSDR Vapor Intrusion Simulation Tool</a>
+  						</div>
+  					</div>
+		    	</div>
+			</div>
+		</div>
+	</div>
+
+
+	<!-- Above Footer Start -->
+	<!-- Global Above Feature -->
+	<!-- Above Footer End -->
+
+	<div class="container-fluid feature-area">
+		<div class="container"></div>
+	</div>
+
+	<!-- Page Content Wrap -->
+	<div class="container d-flex flex-wrap body-wrapper bg-white">
+		<!-- Content -->
+		<main class="col-12 order-lg-2" role="main" aria-label="Main Content Area">
+		  <div class="row visual-element">
+		    <div class="col core-area">
+          <div id="accordionTabs_3" class="accordion accordion-white mb-3 ">
+            <div class="tabs-module">
+							<ul class="nav nav-tabs" id="tabs-3" role="tablist">
+								<li class="nav-item" role="tab">
+									<a class="nav-link active" id="tab_1" data-toggle="tab" href="#tabs-3-1">Data Import</a>
+								</li>
+								<li class="nav-item" role="tab">
+									<a class="nav-link disabled" id="tab_2" data-toggle="tab" href="#tabs-3-2">Results Summary</a>
+								</li>
+								<li class="nav-item resources" role="tab">
+									<a class="nav-link " data-toggle="tab" href="#tabs-resources">Resources</a>
+								</li>
+							</ul>
+							<div class="tab-content">
+
+					    <!--/tabs-3-1-->
+							<div class="tab-pane active" role="tabpanel" id="tabs-3-1">
+								<div class="vapintr-banner">
+									<h1>Welcome to vapintr!</h1>
+										<p class="intro">
+        											The ATSDR Vapor Intrusion Simulation Tool, or vapintr for short, performs vapor intrusion simulations using the Johnson and Ettinger Model (JEM). The application can conduct both deterministic and stochastic simulations. Use the features on this screen to upload your data, view your inputs, and run the JEM. Once the model calculations are finished, the Results Summary screen provides the model results. </p>
+        											<p class="intro">The Resources page contains examples of properly formatted data sets. For questions or assistance using vapintr, please contact the ATSDR technical team at <a href = "mailto:PHAST@cdc.gov" style="color:white">PHAST@cdc.gov</a> and include the phrase "vapintr" in the subject line.
+										</p>
+									</div>
+
+									<div class="instruction">
+										<p><strong>Instructions:</strong>
+										To run the JEM: <br>
+										<ol type = "1">
+  									  <li>Download the Excel data import template by clicking the "Download Data Import Template” link.</li>
+                      <li>Load your data into the template. Example files showing properly formatted data are available on the Resources page.</li>
+                      <li>Click the “Browse” button below and locate the Excel template with your data. Summary information about your simulation, including a table of simulation settings, a conceptual site model image, and a soil strata profiles image, will appear once the data have finished loading.</li>
+                     <li>Scroll down and click the "Run JEM Simulation" button to run the JEM using your simulation settings.</li>
+
+										</ol>
+                    </p>
+									</div>
+
+                <div class="form-group shiny-input-container-inline">
+                  <div class="upload">
+                    <h2>Upload Data Import Template</h2>
+                    <a href="www/vapintrDataTemplate.xlsx" class="download-link">Download Data Import Template</a>
+                    <div class="upload">
+								      {{tab1_data_import}}
+                    </div>
+                    <div>
+                      {{tab1_simulation_settings}}
+                    </div>
+									  <div>
+                      {{tab1_csm_image}}
+									  </div>
+									  <div>
+                      {{tab1_soil_strata_image}}
+									  </div>
+                    <div>
+					            {{tab1_data_calc}}
+									  </div>
+
+                  </div>
+                </div>
+
+							 </div>
+
+              <!--/End tabs-3-1-->
+
+							<!--/tabs-3-2-->
+
+								<div class="tab-pane" role="tabpane2" id="tabs-3-2">
+									<h1>Results Summary</h1>
+									<div>
+									  {{tab2_intructions}}
+									</div>
+                  <h2>Modeled Concentration Summary Table</h2>
+									<div>
+									  {{tab2_sumtable}}
+									</div>
+									<div>
+                    {{tab2_export_simulation_data}}
+                  </div>
+									<div>
+									  {{tab2_violin_plot_drop}}
+									</div>
+									<div>
+									  {{tab2_violin_plot}}
+									</div>
+									<div>
+                    {{tab2_export_violin_plot}}
+									</div>
+								</div>
+
+								<!--/End tabs-3-2-->
+
+<div class="tab-pane" role="tabpane4" id="tabs-resources">
+									<h1>Resources</h1>
+									<p class="pb-3">This page includes four example files for running deterministic and stochastic simulations with groundwater and soil gas data. For further information regarding these files or the ATSDR Vapor Intrusion Simulation Tool, please contact the ATSDR technical team at <a href="mailto:PHAST@cdc.gov">PHAST@cdc.gov</a> and include the phrase "ATSDR Vapor Intrusion Simulation Tool" in the subject line.</p>
+
+                  <div class="row mb-3">
+										<div class="col-md-3">
+											<div class="card card-multi bt-5 theme-cyan bt-secondary mb-3">
+												<div class="card-body ">
+													<div class="card-body pr-0 pl-0">
+														<p><a href="www/download/vapintrDataTemplate_DET_GW.xlsx">Deterministic Groundwater Example Data<span class="icon-file-excel"></span><span class="file-details"></span></a></p>
+														<p>Example import dataset for a deterministic groundwater source simulation</p>
+													</div>
+												</div>
+											</div>
+										</div>
+
+										<div class="col-md-3">
+											<div class="card card-multi bt-5 theme-cyan bt-secondary mb-3">
+												<div class="card-body ">
+													<div class="card-body pr-0 pl-0">
+														<p><a href="www/download/vapintrDataTemplate_DET_SSG.xlsx">Deterministic Subslab Soil Gas Example Data<span class="icon-file-excel"></span><span class="file-details"></span></a></p>
+														<p>Example import dataset for a deterministic subslab soil gas source simulation</p>
+													</div>
+												</div>
+											</div>
+										</div>
+
+
+										<div class="col-md-3">
+											<div class="card card-multi bt-5 theme-cyan bt-secondary mb-3">
+												<div class="card-body ">
+													<div class="card-body pr-0 pl-0">
+														<p><a href="www/download/vapintrDataTemplate_MC_GW.xlsx">Stochastic Groundwater Example Data<span class="icon-file-excel"></span><span class="file-details"></span></a></p>
+														<p>Example import dataset for a stochastic groundwater source simulation</p>
+													</div>
+												</div>
+											</div>
+										</div>
+
+
+										<div class="col-md-3">
+											<div class="card card-multi bt-5 theme-cyan bt-secondary mb-3">
+												<div class="card-body ">
+													<div class="card-body pr-0 pl-0">
+														<p><a href="www/download/vapintrDataTemplate_MC_ESG.xlsx">Stochastic Exterior Soil Gas Example Data<span class="icon-file-excel"></span><span class="file-details"></span></a></p>
+														<p>Example import dataset for a stochastic exterior soil gas source simulation</p>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+								<!--/End tabs-resoursces-->
+
+            </div> <!--/End tabs-module-->
+          </div>
+        </div>
+			</div>
+			<div class="section-nav-area">
+				<nav role="navigation" aria-label="Section Nav" class="w-100 sticky-top">
+					<!-- Page Title/Section Nav (mobile) -->
+				</nav>
+			</div>
+
+			<div class="row">
+				<div class="col content content-fullwidth">
+					<div class="syndicate">
+						<h1 id="content" class="sr-only">Agency for Toxic Substances and Disease Registry</h1>
+					</div>
+				</div>
+			</div>
+		</main>
+	</div>
+
+	<footer class="" role="contentinfo" aria-label="Footer">
+		<div class="container-fluid footer-wrapper">
+			<div class="container">
+				<div class="row">
+					<address class="col-md-6" itemscope="itemscope" itemtype="https://schema.org/Organization">
+						Agency for Toxic Substances and Disease Registry<br>
+						4770 Buford Hwy NE Atlanta, GA 30341 USA<br>
+						800-CDC-INFO (800-232-4636), TTY: 888-232-6348<br>
+						<a href="mailto:PHAST@cdc.gov">Contact Us</a>
+					</address>
+
+					<div class="col-md-6 text-right">
+						U.S. Department of Health and Human Services<br>
+						vapintr Ver 1.0.0
+					</div>
+				</div>
+
+			</div>
+		</div>
+	</footer>
+
+  <!-- Application Requirements; Jquery, Bootstrap, typeahead, A/B testing, AppJs, and foresee metrics  -->
+
+  <script type="text/javascript" src="www/js/lib/bootstrap.bundle.min.js"></script>
+  <script type="text/javascript" src="www/js/lib/jquery.dataTables.min.js"></script>
+  <script type="text/javascript" src="www/js/main.js"></script>
+  <script src="shinyjs/inject.js"></script>
+  {{shinyjs::useShinyjs()}}
+
+  <!-- @axejs@ -->
+  <!-- @prismjs@ -->
+  <!-- @typeaheadjs@ -->
+
+  </body>
+</html>
+

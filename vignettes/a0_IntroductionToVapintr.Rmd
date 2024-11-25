@@ -1,0 +1,53 @@
+---
+title: "Introduction to _vapintr_"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{0_Introduction to vapintr}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Background
+
+Welcome to _vapintr_! 
+
+This package was developed by the Agency for Toxic Substances and Disease Registry (ATSDR) to implement the Johnson and Ettinger model (JEM) for simulating vapor intrusion in R. Vapor intrusion is the process by which vapor-forming chemicals migrate from a subsurface source into indoor air. Exposure to chemical vapors that migrate from groundwater and soil gas into buildings can pose a public health concern via the inhalation pathway, and can lead to other issues including odors, fires, and explosions [ATSDR 2016]. 
+
+In 1991, Johnson and Ettinger developed a heuristic model for predicting the intrusion rate of contaminant vapors into buildings, which is now referred to as the JEM for subsurface vapor intrusion [Johnson and Ettinger 1991]. The JEM is a one-dimensional analytical solution which accounts for diffusive transport of a contaminant in soil vapor as it migrates upwards from a subsurface source through a building foundation and into indoor air via convective and diffusive transport. The model uses data on building characteristics, site geology, and subsurface contaminant concentrations to estimate the contaminant's concentration in indoor air. The final output of the model is a steady-state attenuation factor defined as the ratio of the modeled indoor air contaminant concentration over the contaminant concentration in the source medium (either groundwater, soil gas, or subslab gas). 
+
+Known limitations and uncertainties of the JEM include the following:
+
+* The model does not account for the presence of vapor-transporting conduits or preferential pathways and may result in underprediction of indoor air concentrations where those are present.
+* Unknown or unrecognized contaminant sources in the vadose zone may result in underprediction of indoor air concentrations.
+* The location of samples relative to soil gases and vapors affects the accuracy of predicted indoor air concentrations.
+* Site-specific building factors; heterogeneous soil properties; and sub-slab, indoor, and outdoor conditions may be difficult to characterize. 
+
+Developing an adequate conceptual site model is helpful in identifying or acknowledging these factors. More discussion of uncertainties in JEM inputs is provided in USEPA [2017]. 
+
+The JEM is a commonly used screening tool for evaluating vapor intrusion of recalcitrant (nonpetroleum) chemicals, and it is an important tool for public health professionals interested in quantifying the vapor intrusion inhalation exposure pathway. Since its publication, various tools have been made available that provide results from the model, among which are the United States Environmental Protection Agency's (USEPA's) Excel spreadsheets for conducting deterministic JEM simulations. This package uses version 6.0 of USEPA's JEM spreadsheet [USEPA 2017] as its foundation, which at the time of this writing was available at https://www.epa.gov/vaporintrusion/epa-spreadsheet-modeling-subsurface-vapor-intrusion. 
+
+ATSDR's _vapintr_ package builds upon the capabilities of USEPA's spreadsheet tool by allowing users to perform stochastic JEM simulations. Rather than using constants for model inputs, parameters can instead be input as distributions of values. Similarly, rather than producing a single output result for a set of fixed inputs, the stochastic simulations produce a distribution of results for each output variable. These distributions can be used to identify both central tendency exposure and reasonable maximum exposure indoor air concentrations associated with vapor intrusion, and they provide a better understanding of the likelihood of indoor air concentrations than can be produced using deterministic simulations alone.
+
+The _vapintr_ package includes an R Shiny application which provides a simple user interface for conducting JEM simulations. Instructions for using the application are included within the application. To run the application, use the command `vapintr::run_app()`.
+
+In addition to the vignette you are currently reading, _vapintr_ includes four other vignettes that explain how to use its core functions:
+
+* `vignette("DeterministicSimulations")` explains how to run deterministic simulations using _vapintr_. It provides an explanation of the JEM input parameters and shows how to use the _vapintr_ Excel data import template to run the model. In addition, it shows how to run the JEM directly within R and how to generate summary tables of the simulation inputs, intermediate calculations, and outputs.
+* `vignette("StochasticSimulations")` explains how to run stochastic simulations using _vapintr_. It builds upon the information provided in the deterministic simulation vignette and explains the additional information required to characterize distributions of input parameters and set up a Monte Carlo simulation. In addition, it shows how to generate standard tables and figures based on the stochastic simulation results.
+* `vignette("ModelResultFigures")` gives more detail on the output result figures that can be produced using _vapintr_. It discusses how to create _vapintr_'s standard modeled and measured data figures and provides examples of how to customize them.
+* `vignette("ConceptualSiteModelAndSoilStrataFigures")` shows how to generate standard conceptual site model images using the model inputs and shows how to create representations of the soil strata logs used to characterize the subsurface.
+
+## References
+
+[ATSDR] Agency for Toxic Substances and Disease Registry. 2016. Evaluating vapor intrusion pathways, guidance for ATSDR’s Division of Community Health Investigations. US Department of Health and Human Services: Atlanta, GA.
+
+Johnson PC and Ettinger RA. 1991. Heuristic model for predicting the intrusion rate of contaminant vapors into buildings. Environmental Science and Technology. 25(8):1445-1452.
+
+[USEPA] United States Environmental Protection Agency. 2017. Documentation for EPA's Implementation of the Johnson and Ettinger Model to Evaluate Site Specific Vapor Intrusion into Buildings. Version 6.0. Office of Superfund Remediation and Technology Innovation: Washington, DC.

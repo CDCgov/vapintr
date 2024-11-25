@@ -1,0 +1,74 @@
+Package: vapintr
+Title: Run the Johnson and Ettinger Groundwater Vapor Intrusion model in R
+Version: 1.0.0
+Authors@R: c(
+    person(given = "James", 
+	   family = "Durant", 
+           role = c("aut", "cre"),
+           email = "hzd3@cdc.gov",
+           comment = c(ORCID = "https://orcid.org/0000-0002-3378-7386")),
+    person(given = "William",
+	   family = "Morgan",
+	   role = "aut",
+           email = "William.Morgan@erg.com",
+	   comment = c(ORCID = "https://orcid.org/0009-0008-9931-2237")),
+    person(given = "Kirsten",
+	   family = "Miller",
+           role = "ctb",
+           email = "Kirsten.Miller@erg.com"),
+    person(given = "Tonia",
+           family = "Burke",
+           role = "rev",
+           email = "fxt9@cdc.gov"),
+    person(given = "Sandra",
+           family = "Miller",
+           role = "rev",
+           email = "nyz7@cdc.gov"),
+    person(given = "Tebitha",
+           family = "Mawokomatanda",
+           role = "rev",
+           email = "chn4@cdc.gov")
+    )	
+Description: This package runs the USEPA Johnson and Ettinger model for
+    simulating vapor intrusion in R, allowing for Monte Carlo simulation
+    of uncertain parameters.
+License: CC0
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+Imports: 
+    mc2d (>= 0.1.18),
+    openxlsx,
+    cowplot,
+    dplyr,
+    stringr,
+    ggplot2,
+    magrittr,
+    scales,		
+    lubridate,
+    ggpattern,
+    sf,
+    methods,
+    config (>= 0.3.1),	
+    golem (>= 0.4.1),
+    shiny (>= 1.7.4),
+    stats,
+    shinyjs,
+    rlang,
+    grDevices,
+    DT,
+    shinyalert,
+    writexl,
+    zip,
+    fitdistrplus
+Suggests:
+    readxl,
+    knitr,
+    testthat,
+    rmarkdown
+Depends: 
+    R (>= 2.10)
+VignetteBuilder: 
+    knitr
+Encoding: UTF-8
+Language: en-US

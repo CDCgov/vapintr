@@ -1,0 +1,685 @@
+---
+title: "Deterministic Simulations"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{1_Deterministic Simulations}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+
+The _vapintr_ package can perform both deterministic and stochastic Johnson and Ettinger Model (JEM) simulations. In a deterministic simulation, the package uses one value of each model input parameter to generate one value of each model output variable, and in a stochastic simulation, the package uses distributions of input parameters to generate distributions of output variables.
+
+This vignette shows how to use _vapintr_ to run deterministic simulations. It first shows how data can be imported into _vapintr_ using _vapintr_'s data import template and identifies the parameters required to run the model. Next, it describes an example site and shows how to use _vapintr_'s visualization features to create conceptual site model and soil strata profile images for the site. Finally, it shows examples of running deterministic simulations and discusses the information provided in the model results.
+
+The following code loads the _vapintr_ package and the dplyr package, which is used to manipulate data within this vignette. 
+
+```{r setup, warning = FALSE, message = FALSE}
+library(vapintr)
+library(dplyr)
+```
+
+## Data Import Template
+
+To run the JEM using _vapintr_, the needed input parameters can either be entered directly into R or be imported into R using a custom Excel data template that accompanies the package. The data import template includes six sheets that contain all the information needed to run the JEM. In addition, it includes a ReadMe sheet that describes the required input parameters, and a SupportedContaminants sheet that identifies the contaminants that _vapintr_ can simulate. The import template is named "vapintrDataTemplate.xlsx" and is saved in the package installation folder. 
+
+After installing _vapintr_, the template file can be located by calling `system.file(dir = "app/www", file = "vapintrDataTemplate.xlsx", package = "vapintr")`, which returns the path to the import template. You can use the following command to open the template and follow along with the vignette: `shell.exec(file = system.file(dir = "app/www", file = "vapintrDataTemplate.xlsx", package = "vapintr"))`. 
+
+### Settings
+
+The first sheet, Settings, identifies parameters that control the overall simulation settings. It contains two primary fields: the Parameter field identifies each setting parameter's name, and the Value field identifies the value assigned to each setting. A third field, Notes, provides additional information about how _vapintr_ uses some of the parameters. Most of the settings parameters are categorical and will accept only the inputs listed in the dropdown menus on the Value field cells. The settings parameters are:
+
+-   **Simulation type**: Identifies whether the simulation is a "Deterministic" or "Stochastic" simulation. A deterministic simulation uses one value for each model input parameter and returns one value for each output variable, whereas a stochastic simulation uses distributions to characterize the model input parameters and returns distributions for the output variables.
+-   **Source medium**: Identifies the contaminant source medium in the subsurface. Supported options are "Groundwater", "Exterior Soil Gas", and "Subslab Soil Gas".
+-   **Apply default building parameters**: A Yes/No field for whether the simulation will use default values for all the parameters in the template's "BuildingInfo" sheet. Use "Yes" if the building characteristics are unknown and "No" if site-specific building data are available. If "Yes", _vapintr_ ignores the data entered on the "BuildingInfo" sheet.
+-   **Building setting**: Identifies the type of building simulated. Supported options are "Residential" and "Commercial". This parameter controls default parameter values and parameter ranges applied in the package's validation functions but does not impact the model equations.
+-   **Foundation type**: Identifies the building foundation type. Supported options for residential buildings are "Slab-on-grade", "Basement w/ Slab", "Basement w/ Dirt Floor", "Closed Crawl Space w/ Slab", and "Closed Crawl Space w/ Dirt Floor". Supported options for commercial buildings are "Slab-on-grade", "Basement w/ Slab", and "Basement w/ Dirt Floor". Neither of the crawlspace options are supported for commercial buildings.
+-   **Simulate capillary zone**: For groundwater simulations only, this parameter identifies whether to directly simulate contaminant flux from the groundwater source through the capillary zone or to apply an approximation instead. If "Yes" is selected, the model will simulate flux through the capillary zone, but if "No" is selected, the model will approximate contaminant flux through the capillary zone by multiplying the source concentration by a factor of 0.10, following the procedure applied in the BioVapor model [GSI 2012]. The value of this parameter is ignored in exterior and subslab soil gas simulations.
+-   **Number of Monte Carlo iterations**: This parameter is not evaluated in deterministic simulations.
+
+### Building Information
+
+The second sheet, BuildingInfo, specifies properties related to the building and building foundation. Values on this sheet only need to be set if site-specific building data are available and the "Apply default building parameters" value on the Settings sheet is set to "No". If it is set to "Yes", _vapintr_ will ignore any data entered on this sheet when running the JEM.
+
+The Parameter field identifies the building parameters that need to be set, and the JEMSymbol field identifies the symbol used to represent the parameter in the package documentation, the output data, and the conceptual site model images. The values in these fields should not be changed; if they are changed, the program will throw an error when the data are imported.
+
+The following building parameters must be specified in each simulation:
+
+-   **Depth below grade to base of foundation (L<sub>b</sub>)**: The depth from ground surface to the base of the building foundation. Can be entered in units of feet (ft) or meters (m).
+-   **Foundation thickness (L<sub>f</sub>)**: The thickness of the building foundation. Can be entered in units of ft or m.
+-   **Fraction of foundation area with cracks (eta)**: The fraction of the foundation area with cracks. The entered value is dimensionless.
+-   **Enclosed space floor area (A<sub>bf</sub>)**: The surface area of the subsurface floor and walls. Can be entered in units of square feet (ft^2^) or square meters (m^2^).
+-   **Enclosed space mixing height (H<sub>b</sub>)**: The height of the interior building volume where contaminated air from the subsurface mixes with indoor air. Can be entered in units of ft or m.
+-   **Indoor air exchange rate (ach)**: The rate of building air exchange with the outdoors. Must be entered in units of air changes per hour. Because air changes are dimensionless, these units appear as 1/hr in the template's Units field.
+-   **Qsoil/Qbuilding (Q<sub>soil</sub>\_Q<sub>b</sub>)**: The ratio of the average vapor flowrate into the building (Q<sub>soil</sub>) divided by the building ventilation rate (Q<sub>b</sub>). The entered value is dimensionless.
+
+The Units field identifies the units for each of the model parameters. The package supports only the units allowed by the dropdowns and default values in the data import template, all of which are identified above.
+
+The Distribution field identifies the distribution used to simulate the parameter. For deterministic simulations, all seven parameters use a constant value, so "Constant" should be selected in the Distribution field for each parameter. The program will throw an error if a distribution besides "Constant" is selected for any parameter in a deterministic simulation.
+
+The DistributionParameterType field identifies the parameters required to characterize the parameter distribution. Values in the DistributionParameterType field are automatically updated based on the value selected in the Distribution field. For constant distributions, the only parameter associated with the distribution is a constant value, so all the other DistributionParameterType cells are grayed out.
+
+For each DistributionParameterType, a corresponding DistributionParameterValue is needed. If site-specific parameter values are available, those data should be entered in the DistributionParameterValue field using the units specified for each parameter in the Units column. Default values can be entered for any parameters that do not have site-specific data available.
+
+If the "Apply default building parameters" setting is set to "Yes" on the data import template's Settings sheet, the simulation will use default building parameters instead of reading data from the BuildingInfo sheet. Default values for each building parameter come from version 6.0 of USEPA's JEM spreadsheet [USEPA 2017] and depend on the building setting and foundation type selected on the Settings sheet. The `getBuildingDefaults()` function can be used to observe the default building parameters for a particular building setting and foundation type. For example, the table below shows the output of this function for a deterministic simulation of a residential building with a slab-on-grade foundation. Default values can be used anytime site-specific data are not available.
+
+```{r}
+#Get a dataframe of example building defaults
+example_building_defaults <- getBuildingDefaults("Residential","Slab-grade","DET")
+
+#Rename the columns for improved readability
+example_building_defaults <- example_building_defaults %>% rename(
+  `JEM Symbol` = JEMSymbol,
+  `Distribution Parameter Type` = DistributionParameterType,
+  `Distribution Parameter Value` = DistributionParameterValue
+)
+
+#Format numeric values as strings for printing
+example_building_defaults <- example_building_defaults %>% 
+  dplyr::mutate_if(is.numeric, list(~as.character(signif(., 3))))
+
+#Display the example building defaults table
+knitr::kable(example_building_defaults, "simple")
+```
+
+### Vadose Zone Information
+
+The VadoseZoneInfo sheet identifies parameters related to the contaminant source beneath the building. It has the same field names and structure as the BuildingInfo sheet and requires the user to input data for two parameters:
+
+-   **Depth below grade to source (L<sub>s</sub>)**: For groundwater simulations, this parameter represents the depth below ground surface to the top of the water table. For soil gas simulations, it represents the depth below ground surface at which the soil gas sample was collected. The depth below grade to source must be deeper than the foundation bottom depth and can be entered in units of either ft or m.
+-   **Average source temperature (T<sub>s</sub>)**: Represents the average groundwater temperature in groundwater simulations or the average vadose zone temperature in soil gas simulations. Can be entered in units of either degrees Celsius ($^\circ$C) or degrees Fahrenheit ($^\circ$ F).
+
+In deterministic simulations, only constant values are allowed for L<sub>s</sub> and T<sub>s</sub>. The _vapintr_ package will throw an error if any other distribution type is used in a deterministic simulation for these two parameters.
+
+### Strata Logs
+
+The StrataLogs sheet characterizes the subsurface soil strata beneath the building. Because the soil profile may not be the same in all areas beneath a building footprint, the StrataLogs sheet can include data for more than one soil strata log. However, each deterministic JEM simulation can use soil information from only one log, as shown in the examples in the Running Deterministic Simulations section of this document. The StrataLogs sheet has five fields:
+
+-   **LogID**: A unique identifier for each strata log. All records with the same LogID are assumed to be part of the same strata log, and the LogID is used to identify the strata log evaluated within the JEM.
+-   **LayerOrder**: Identifies the order of the layers by depth. Only sequential integers (1, 2, 3, etc.) are allowed in this field. The record with LayerOrder 1 is the shallowest layer in each log and is assumed to be at ground surface. The depth of each layer increases with increasing LayerOrder numbers, such that LayerOrder 2 is beneath LayerOrder 1, LayerOrder 3 is beneath LayerOrder 2, and so on.
+-   **Thickness**: The numeric vertical thickness of the layer.
+-   **Units**: The units associated with the layer thickness. Layer thicknesses can be entered in either ft or m.
+-   **SoilType**: Identifies the soil type used to define the layer properties. The _vapintr_ package uses the 12 United States Department of Agriculture (USDA) Soil Conservation Service (SCS) soil types to characterize the soil properties. Property values for each soil type come from defaults included in the USEPA v6.0 JEM spreadsheet [USEPA 2017].
+
+### Contaminant Data
+
+The ContaminantData sheet lists environmental sample records for site contaminants. Each JEM simulation uses data for only one contaminant concentration from a specific source medium (groundwater, exterior soil gas, or subslab soil gas), but the ContaminantData sheet can store records for multiple contaminants sampled from multiple media. The sheet includes the following fields:
+
+-   **Contaminant**: The name of the contaminant.
+-   **CASRN**: The contaminant's Chemical Abstract Service Registry Number (CASRN). Only one CASRN is allowed per contaminant, and only one contaminant name is allowed per CASRN. Different names for the same contaminant should be standardized to a single name before adding the data to the import template. Supported contaminants and their CASRNs are identified on the SupportedContaminants sheet of the data import template. Contaminant names may differ from those listed on the SupportedContaminants sheet, but the entered CASRNs must match a CASRN on the SupportedContaminants sheet. Otherwise, the program will be unable to evaluate the contaminant and will throw an error.
+-   **Medium**: The sample medium of the contaminant record. Allowable options are "Groundwater", "Exterior Soil Gas", "Subslab Soil Gas", "Indoor Air", and "Outdoor Air". The JEM accepts only groundwater, exterior soil gas, and subslab soil gas data as inputs. Indoor and outdoor air data are not required to run the model, but can be used within _vapintr_ to generate measured data figures for comparison with modeled results.
+-   **Concentration**: The numeric concentration of the contaminant in the sampled medium. For nondetects, enter the record's reporting limit. Nondetect groundwater or soil gas concentrations are not evaluated within _vapintr_'s JEM simulations, but nondetect indoor or outdoor air concentrations will be plotted on output figures that display measured data along with stochastic simulation results. See the "Model Result Figures" vignette for more information.
+-   **Units**: The units associated with the value in the Concentration field. The _vapintr_ package supports the following concentration units for all media: "mg/L" for milligrams per liter, "mg/m3" for milligrams per cubic meter, "ug/L" for micrograms per liter, "ug/m3" for micrograms per cubic meter, "ppm" for parts per million, and "ppb" for parts per billion.
+-   **DetectedFlag**: A Yes/No field indicating whether the record represents a detection (Yes) or a nondetect (No).
+-   **SampleLocationID**: The ID of the location where the sample was collected.
+-   **SampleDate**: The sample date.
+
+All the fields except the SampleDate field are required for each record. The SampleDate field is not used within the JEM equations and is required only if generating plots comparing measured and modeled data, as discussed in the Model Result Figures vignette.
+
+### Reference Air Concentrations
+
+Reference air concentrations, such as air screening levels or representative background concentrations, can be added to measured data plots as discussed in the Model Result Figures vignette. The ReferenceAirConcentrations sheet can be used to specify up to four reference concentrations per simulated contaminant. The sheet includes the following fields:
+
+-   **Contaminant**: The name of the contaminant.
+-   **CASRN**: The contaminant's CASRN. The CASRN and contaminant name must match those entered on the "ContaminantData" sheet for the reference air concentration to appear in the contaminant's measured data plot.
+-   **ReferenceConcentrationName**: The name of the reference air concentration. The measured data plots will report the reference air concentration name exactly as it is formatted in this field.
+-   **Concentration**: The numeric value of the reference air concentration.
+-   **Units**: The units associated with the value in the Concentration field.
+
+## Site Description
+
+The examples in this vignette use data stored in a copy of the data import template saved in the extdata subfolder of the _vapintr_ package installation folder. The following script gets a path to the example data file and reads the data into R using _vapintr_'s `importTemplateData()` function. To view the file contents, run the command `shell.exec(file = system.file("extdata", "Deterministic_Simulation_Example_Data.xlsx", package = "vapintr"))`. The `importTemplateData()` function requires the template path as its only input and returns a list with six elements, one for each data entry sheet in the data import template.
+
+```{r}
+#Get example data file path
+import_data_file_path <- system.file("extdata", "Deterministic_Simulation_Example_Data.xlsx", package = "vapintr")
+
+#Import the example data
+imported_data_lx <- importTemplateData(import_data_file_path)
+
+```
+
+In addition to reading the imported data, the `importTemplateData()` function performs quality control checks on each data field. If errors are identified, _vapintr_ will issue an error and the import will fail. The `importTemplateData()` function also performs data transformations required for _vapintr_ to run the JEM. Transformations made include creating new data structures for the imported data, standardizing parameter units, building distributions for stochastic simulations, and so on. Key data transformation steps completed by `importTemplateData()` include:
+
+-   The Settings, StrataLogs, ContaminantData, and ReferenceAirConcentrations sheets are converted to data frames. The information in the Settings sheet is transposed so that each parameter represents a distinct field in the output data frame. The output data frames for the StrataLogs, ContaminantData, and ReferenceAirConcentrations sheets have the same structure as that used in the template.
+-   For deterministic simulations, the data in the BuildingInfo and VadoseZoneInfo sheets are also transformed into data frames in which each parameter is represented by a distinct field. For stochastic simulations, the data are used to generate lists of custom `JEMParamDist` objects for each parameter. `JEMParamDist` objects contain all the information needed to characterize each parameter's distribution in a stochastic simulation and are discussed further in the "Stochastic Simulations" vignette.
+-   All parameter units are converted to the standard units required for each parameter by _vapintr_'s implementation of the JEM equations. These conversions include changing all instances of ft to m, changing $^\circ$ F to $^\circ$ C, converting groundwater concentrations to micrograms per liter (μg/L), and converting soil gas and air concentrations to either micrograms per cubic meter (μg/m^3^) or parts per billion (ppb).
+-   Some parameter fields are renamed and some parameter values are converted to simplified codes for ease of use in the program functions. For example, the "Foundation Type" parameter from the Settings sheet is renamed to "foundation_type", and the values of this field are converted to simplified codes such as "Crawlspace-slab" for "Closed Crawl Space w/ Slab" and "Basement-dirt" for "Basement w/ Dirt Floor".
+
+### Conceptual Site Model
+
+The data frame generated from the Settings sheet is saved in the fifth element of the `importTemplateData()` output list. It includes all the information identified above for the Settings sheet, but with many of the parameter names and values transformed for ease of use within the program code, as shown in the table below. For ease of reading, the data frame is transposed so that the field names are in the first column and the field values are in the second column.
+
+```{r}
+#Assign transposed settings data to a new data frame
+transposed_settings_data <- t(imported_data_lx[[5]])
+
+#Change row names to a column and assign column names for display
+transposed_settings_data <- cbind(rownames(transposed_settings_data), data.frame(transposed_settings_data, row.names = NULL))
+colnames(transposed_settings_data) <- c("Field Name", "Field Value")
+
+#Display a table using the transposed settings data frame
+knitr::kable(transposed_settings_data, "simple")
+
+```
+
+The simulation_type of "DET" and the source_medium of "Groundwater" identify the simulation as a deterministic groundwater simulation. The building simulated is a commercial building with a slab-on-grade foundation. The simulation will use site-specific building parameters because the value of the apply_default_building_parameters field is FALSE, and the simulation will model flux through the capillary zone because the value of the simulate_capillary_zone field is TRUE. The number_of_monte_carlo_iterations has a value of "NA" and is not used in deterministic simulations.
+
+The _vapintr_ package includes a custom class, `SiteModelFig`, for generating a conceptual site model figure based on the values in the settings data frame. The `SiteModelFig` class is a custom R6 class developed for _vapintr_ that contains all the methods and properties needed to generate the conceptual site model figure. The conceptual site model figure is generated by creating a new instance of the `SiteModelFig` class with the settings data frame passed as an input, calling the object's `createStandardFigure()` function, and then plotting the image that is assigned to the object's `fig_image` property, as shown below. More information about the class and about creating and manipulating conceptual site model figures can be found in the "Conceptual Site Model and Soil Strata Figures" vignette.
+
+```{r}
+#Create a new SiteModelFig object using the imported settings data
+site_model_figure <- SiteModelFig$new(imported_data_lx[[5]])
+
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+The conceptual site model image for this simulation shows a commercial building with a slab-on-grade foundation. Beneath the building, groundwater is shown as the contaminant source, and the capillary zone is displayed because flux through the capillary zone will be modeled. The figure symbolically displays all the parameters from the data import template's BuildingInfo and VadoseZoneInfo sheets. The data frame of BuildingInfo parameter values is stored in the second element of the `importTemplateData()` output list, and the data frame of VadoseZoneInfo parameter values is stored in the third element.
+
+The table below shows the building and vadose zone parameter values for this scenario. In the building and vadose zone data frames generated by `importTemplateData()`, the parameter symbols are the field names. The code below transposes the building and vadose zone data frames, combines them into a single data frame, and then adds the parameter types and names for reference. The code also adds the standard units that _vapintr_ applies for each parameter in the JEM equations. If values are imported using other units, _vapintr_ will convert them to the units shown in the table before running the JEM.
+
+```{r}
+#Assign transposed building and vadoze zone data to a new variable
+transposed_building_vadoze_zone_data <- rbind(t(imported_data_lx[[2]]), t(imported_data_lx[[3]]))
+
+#Change row names to a column and assign column names for display
+transposed_building_vadoze_zone_data <- cbind(rownames(transposed_building_vadoze_zone_data), data.frame(transposed_building_vadoze_zone_data, row.names = NULL))
+
+#Identify parameter types and names
+parameter_types <- c(rep("Building", 7), rep("Vadose Zone", 2))
+parameter_names <- c("Depth below grade to base of foundation",
+                    "Foundation thickness",
+                    "Fraction of foundation area with cracks",
+                    "Enclosed space floor area",
+                    "Enclosed space mixing height",
+                    "Indoor air exchange rate",
+                    "Qsoil/Qbuilding",
+                    "Depth below grade to source",
+                    "Average source temperature")
+             
+#Add parameter types and names to the data frame       
+transposed_building_vadoze_zone_data <- cbind(parameter_types, parameter_names, transposed_building_vadoze_zone_data)
+
+#Add units
+parameter_units <- c("m", "m", "-", "m2", "m", "1/hr", "-", "m", "deg C")
+transposed_building_vadoze_zone_data <- cbind(transposed_building_vadoze_zone_data, parameter_units)
+                                  
+#Add column names for display
+colnames(transposed_building_vadoze_zone_data) <- c("Parameter Type", "Parameter Name", "Field Name", "Field Value", "Units")
+  
+#Format numeric values                                
+transposed_building_vadoze_zone_data <- transposed_building_vadoze_zone_data %>% 
+  dplyr::mutate_if(is.numeric, list(~as.character(signif(., 3))))
+
+#Display the building and vadose zone parameter value table
+knitr::kable(transposed_building_vadoze_zone_data, "simple")
+
+```
+
+### Site Strata Logs
+
+The data frame of soil strata data is saved in the fourth element of the `importTemplateData()` output list.
+
+```{r}
+#Display the soil strata information table
+knitr::kable(imported_data_lx[[4]])
+
+```
+
+The example scenario dataset includes data for three soil strata logs, as denoted by their LogIDs: "MW01", "MW02", and "MW03". The log for MW01 includes five soil layers, whereas the logs for MW02 and MW03 both include just four layers.
+
+Soil strata logs can be visualized using _vapintr_'s custom `StrataProfileFig` class. Like the `SiteModelFig` class, the `StrataProfileFig` class is a custom R6 class developed for _vapintr_ that contains all the methods and properties needed to generate strata profile figures. The code below creates a new instance of the `StrataProfileFig` class with the imported soil strata data frame passed as an input, calls the object's `createStandardFigure()` function, and then plots the image assigned to the object's `fig_image` property. More information about creating and manipulating soil strata figures can be found in the "Conceptual Site Model and Soil Strata Figures" vignette.
+
+```{r}
+#Create a new strata profile figure object
+strata_figure <- StrataProfileFig$new(imported_data_lx[[4]])
+
+#Generate the standard strata profile figure
+strata_figure$createStandardFigure()
+```
+```{r, fig.width = strata_figure$fig_width, fig.height = strata_figure$fig_height}
+
+#Plot the soil strata figure
+plot(strata_figure$fig_image)
+```
+
+The strata profile figure shows the thickness and order of the layers in each soil strata log, along with each layer's USDA SCS soil type. In the example data, all three logs contain Sand, Loamy Sand and Silt Loam layers. Logs MW01 and MW02 also include a layer of Sandy Loam, and logs MW01 and MW03 include a layer of Silt. The figure legend identifies the pattern associated with each SCS soil type and always includes all 12 SCS soil types, regardless of the imported soil types in the site data. In each log, strata are ordered by depth according to the values entered in the log's `LayerOrder` field, and strata thicknesses are shown in meters.
+
+### Contaminant Concentration Data
+
+The measured contaminant concentration records are contained in the first element of the `importTemplateData()` output list. The table below shows the imported contaminant data in the example data set, with the exception of the CASRN field, which was filtered out to save space.
+
+```{r}
+#Save the concentration data in a variable
+concentration_data <- imported_data_lx[[1]]
+
+#Filter out the CASRN field to save space
+concentration_data <- concentration_data %>% select(-CASRN)
+
+#Format dates
+concentration_data <- concentration_data %>% mutate(SampleDate = format(as.Date(SampleDate,origin = "1899-12-30"),"%m/%d/%Y"))
+
+#Display the concentration data table
+knitr::kable(concentration_data)
+```
+
+The concentration data contain groundwater records for two contaminants, trichloroethylene and  tetrachloroethylene, from four sampling events at the three monitoring wells mentioned in the Site Strata Logs section. Both contaminants were detected in all four samples in monitoring wells MW01 and MW02, but they were each detected only once during the first sampling event in well MW03.
+
+### Reference Air Concentration Data
+
+Imported reference air concentration data are contained in the sixth element of the `importTemplateData()` output list. Because modeled and measured data plots with identified reference air concentrations can only be created using results from stochastic simulations, no reference air concentrations were included in this example.
+
+## Running Deterministic Simulations
+
+The main function in _vapintr_ for running both deterministic and stochastic JEM simulations is named `runJE()`. The `runJE()` function requires five inputs, which correspond with the first five elements in the `importTemplateData()` output list. Only the reference air concentration data frame is not required. The building data, vadose zone data, and settings data from the `importTemplateData()` output list can be passed directly to `runJE()` to run the JEM. However, for the contaminant and soil strata data, only one contaminant concentration and soil strata log can be passed to the function, so the imported data must be subset to the desired values before running a simulation.
+
+### Running a Deterministic Simulation Using runTemplateData()
+
+To facilitate this process, _vapintr_ includes a wrapper function, `runTemplateData()`, which allows the user to specify a soil strata log and contaminant to simulate within `runJE()`. The `runTemplateData()` function accepts the `importTemplateData()` output list as its first argument, and the remaining arguments are all optional. The second and third arguments identify the name of a contaminant and soil strata log to simulate, and the fourth argument is an optional TRUE/FALSE flag that identifies whether contaminant input concentrations should be aggregated in deterministic simulations. The final argument is an optional TRUE/FALSE flag that establishes whether errors and warnings will be written to the console or if they will be tracked in the function's output.
+
+If a contaminant name is provided, _vapintr_ will perform JEM simulations on that contaminant only. The contaminant name must match one of the imported contaminant names and have detected concentration records for the source medium; otherwise the simulation will not run. If a contaminant name is not provided, _vapintr_ will perform JEM simulations on all the detected contaminants in the imported dataset. 
+
+If a logID is provided, the simulation will characterize the subsurface using soil strata data associated with the logID. If a logID is not provided, the simulation will characterize the subsurface using data associated with the first LogID saved in the template's StrataLogs sheet.
+
+The `use_aggregate_data_in_det_simulation` input argument controls whether detected concentrations are aggregated when the imported data include more than one detected concentration for a contaminant. The default value of this argument is `FALSE`, indicating that `runTemplateData()` will run the JEM separately for each detected concentration in the imported data set. If the argument is set to `TRUE`, the contaminant concentrations will be aggregated as discussed in the "Aggregating Contaminant Concentrations" section of this vignette.
+
+The following code calls the `runTemplateData()` function using the imported data as inputs. `"Tetrachloroethylene"` is entered as the contaminant name, and `"MW01"` is entered for the LogID. Because the `use_aggregate_data_in_det_simulation` argument is not specified, the function will use the default value of `FALSE` and will run the JEM using `runJE()` for each detected tetrachloroethylene groundwater concentration record in the imported data.
+
+```{r}
+#Run the JEM using the imported template data, the imported tetrachloroethylene data, and the strata log for well MW01
+jemOutput <- runTemplateData(imported_data_lx, "Tetrachloroethylene", "MW01")
+
+```
+
+### Simulation Output
+
+For deterministic simulations in which the contaminant records are not aggregated, `runTemplateData()` returns a list of lists containing one element for each contaminant record simulated. The imported data passed to `runTemplateData()` in the previous example included nine detected tetrachloroethylene groundwater concentration records, so the output from the call to `runTemplateData()` is a list with nine elements.
+
+```{r}
+#Show the number of records in the output data
+print(length(jemOutput))
+
+#Print the names of the fields in a list element
+print(names(jemOutput[[1]]))
+
+```
+Each list element is a named list that identifies simulation inputs, the output from `runJE()`, and any errors or warnings generated during each simulation. The reported simulation inputs allow individual source contaminant records to be identified and are the contaminant name, the source concentration and units, the sample location ID, and the sample date. The contaminant names that `runTemplateData()` returns are standard names assigned based on the contaminant CASRN. Standard chemical names used in _vapintr_ can be found in the `Chemical` field of the `vapintr::chem_data` data frame. The output from `runJE()` is saved in the JEMResults field of each list element, and any errors and warnings are saved in the Error and Warning fields, respectively. If the simulation did not return any errors or warnings, the value of the Error and Warning fields will be NULL.
+
+For deterministic simulations, the output of `runJE()` is a data frame that identifies calculated output variables and summarizes some of the model inputs. The `pullResults()` function can be used to subset the output data frame into five supporting tables organized by category. The code below shows these tables for the first simulation results in the example output.
+
+```{r}
+#Get organized output tables from the JEM simulation
+resultTables <- pullResults(jemOutput[[1]]$JEMResults) 
+
+#Store table names
+resultTableNames <- names(resultTables)
+
+#Format numeric values                            
+resultTables <- sapply(1:length(resultTables), function(i){
+  resultTables[[i]] <- resultTables[[i]] %>% 
+    mutate(Value = as.character(signif(Value, 3)))
+}, simplify = FALSE, USE.NAMES = TRUE)
+
+#Reassign table names
+names(resultTables) <- resultTableNames
+```
+
+The `output` data frame in the `pullResults()` output list includes the primary output variables of interest from the JEM, which are:
+
+-   **alpha**: The calculated attenuation factor, which relates the estimated contaminant indoor air concentration (C<sub>ia</sub>) to the contaminant source concentration (C<sub>s</sub>).
+-   **Cia**: The contaminant concentration in indoor air predicted by the JEM using the calculated attenuation factor (alpha) and contaminant source concentration (C<sub>s</sub>), in units of μg/m^3^. For groundwater simulations, C<sub>s</sub> is the contaminant gas-phase concentration in equilibrium with the groundwater concentration. In groundwater simulations where the capillary zone is not simulated, the BioVapor correction is applied and C<sub>s</sub> is reduced by a factor of 10 before calculating C<sub>ia</sub>.
+-   **Cia_ppb**: The model-predicted indoor air concentration in units of parts per billion by volume (ppbv).
+-   **Css**: For buildings with a slab foundation, C<sub>ss</sub> is the predicted contaminant concentration in subslab soil gas directly beneath the foundation, in units of μg/m^3^. C<sub>ss</sub> is not calculated for buildings with a dirt floor foundation.
+-   **Css_ppb**: The model-predicted subslab soil gas concentration in units of ppbv.
+
+```{r}
+#Display the output variable table
+knitr::kable(resultTables$output, row.names = F)
+```
+
+The `abc_parameter` data frame includes the values of three internal variables, A<sub>Param</sub>, B<sub>Param</sub>, and C<sub>Param</sub>, which are used to calculate the attenuation factor (alpha) predicted by the JEM. In general, A<sub>Param</sub> can be interpreted as the coefficient of diffusive transport for a basement with a dirt floor, B<sub>Param</sub> represents the Peclet number for transport through the building foundation, and C<sub>Param</sub> represents convective transport from the subslab to the building. USEPA's v6.0 JEM spreadsheet documentation [USEPA 2017] provides more detailed explanations of these parameters.
+
+```{r}
+#Display the ABC parameter table
+knitr::kable(resultTables$abc_parameter, row.names = F)
+```
+
+The `subsurface` table shows results of internal calculations on the height of subsurface zones above the contaminant source and on chemical diffusivity in those zones. The variables reported in the `subsurface` table represent:
+
+-   **DeffT**: The total effective diffusivity of the contaminant from the subsurface source to the building foundation, in units of square centimeters per second (cm^2^/s).
+-   **DeffBF**: The contaminant's effective diffusivity in the soil layer immediately beneath the building foundation, in units of cm^2^/s.
+-   **DeffCZ**: The contaminant's effective diffusivity in the capillary zone, in units of cm^2^/s. Applicable only in groundwater simulations in which the capillary zone is simulated.
+-   **DeffUZ**: The contaminant's effective diffusivity in the unsaturated zone, in units of cm^2^/s.
+-   **hcz**: The height of the capillary zone above the contaminant source, in meters. Applicable only in groundwater simulations in which the capillary zone is simulated.
+-   **huz**: The height of the unsaturated zone above the contaminant source, in meters.
+
+```{r}
+#Display the table of calculated subsurface variables
+knitr::kable(resultTables$subsurface, row.names = F)  
+```
+
+The `source` table identifies properties of the contaminant source. C<sub>medium</sub> is the source concentration, C<sub>s</sub> is the gas-phase source concentration, and \%Sat is the percent saturation of the contaminant in gas, calculated as C<sub>s</sub> divided by the contaminant's pure saturated vapor concentration. L<sub>s</sub> and T<sub>s</sub> are as defined previously.
+
+```{r}
+#Display the source table
+knitr::kable(resultTables$source, row.names = F)  
+```
+
+The `building` table shows the building parameters used in the simulation, all of which are as defined previously.
+
+```{r}
+#Display the building parameter value table
+knitr::kable(resultTables$building, row.names = F)  
+```
+
+### Aggregating Contaminant Concentrations
+
+If more than one contaminant record exists for the simulated medium, the `runTemplateData()` function can also aggregate the detected concentrations to generate an overall summary statistic to use for the source contaminant concentration. This process is implemented by setting the `use_aggregate_data_in_det_simulation` argument to TRUE in the call to `runTemplateData()`. 
+
+The `runTemplateData()` function uses a two-step process to aggregate detected concentrations into a single overall statistic for each contaminant. In the first step, `runTemplateData()` calculates the median of the detected concentrations at each unique SampleLocationID; any nondetect observations are ignored. In the second step, `runTemplateData()` evaluates the median of the median concentrations from each location and uses that value as the source concentration within the JEM.
+
+The code below shows the process that `runTemplateData()` follows to perform these steps for the tetrachloroethylene data in the imported dataset. First, the code subsets the concentration data to only the detected tetrachloroethylene records. Second, it calculates the medians of the detected concentrations at each location, as shown in the first table. As mentioned, the imported dataset included results from three monitoring wells---the median detected concentrations of tetrachloroethylene at wells MW01, MW02, and MW03 were 18.5 μg/L, 23 μg/L, and 3 μg/L, respectively. Finally, it evaluates the median of the medians to obtain the source concentration to evaluate within the JEM, which in this example is 18.5 μg/L.
+
+```{r}
+#Get the subset of detected tetrachloroethylene records
+detected_records_dfx <- imported_data_lx[[1]] %>% filter(DetectedFlag == TRUE,
+                                                         Contaminant == "Tetrachloroethylene")
+
+#Get the median concentration values for each location
+location_medians_dfx <- detected_records_dfx %>%
+  group_by(Contaminant, CASRN,  SampleLocationID, Units) %>%
+  summarise(Median = median(Concentration, na.rm = TRUE))
+
+#Reorder columns for visualization 
+location_medians_dfx <- location_medians_dfx <- location_medians_dfx[, c(1, 2, 3, 5, 4)]
+
+#Display a table of the location medians
+knitr::kable(location_medians_dfx)
+
+#Get the median concentration from all locations
+overall_median_dfx <- location_medians_dfx %>% 
+  group_by(Contaminant, CASRN, Units) %>%
+  summarise(Median = median(Median))
+
+#Reorder columns for visualization 
+overall_median_dfx <- overall_median_dfx <- overall_median_dfx[, c(1, 2, 4, 3)]  
+
+#Display a table showing the overall median (final source concentration)
+knitr::kable(overall_median_dfx)
+```
+
+All these steps happen internally within `runTemplateData()`. The example below shows a call to `runTemplateData()` with the `use_aggregate_data_in_det_simulation` argument set to TRUE. In this example, a contaminant is not specified, so the function will report results for all contaminants with groundwater detections in the imported data. Because the imported data include concentration records for two contaminants (trichloroethylene and tetrachloroethylene), the output list from `runTemplateData()` has two elements. In this example, the output list for tetrachloroethylene is stored in the first list element, and the output list for trichloroethylene is stored in the second list element. 
+
+The example shows results from the tetrachloroethylene output list, which are stored in `jemOutput[[1]]`. The list identifies the median input concentration and units calculated within `runTemplateData()` but does not include the sample location ID or sample date fields because the results are aggregated across multiple samples. The JEMResults, Error, and Warning fields in the output list contain the same information as discussed previously. 
+
+```{r}
+#Run the JEM using the imported template data with aggregated contaminant results
+jemOutput <- runTemplateData(imported_data_lx, contaminant = NA, logID = "MW01", use_aggregate_data_in_det_simulation = TRUE)
+
+#Print the number of elements in the output data set
+print(length(jemOutput))
+
+#Print the names of the elements in the tetrachloroethylene output list
+print(names(jemOutput[[1]]))
+
+#Print the values of the Contaminant, Concentration, and Units field
+print(jemOutput[[1]]$Contaminant)
+print(jemOutput[[1]]$Concentration)
+print(jemOutput[[1]]$Units)
+
+```
+### Run Results for All Soil Strata Logs
+
+As mentioned, the imported data set includes data from three soil strata logs: MW01, MW02, and MW03. In the previous examples, the `logID` argument of `runTemplateData()` was set to `"MW01"` to identify the soil strata profile beneath the building. If the data import template contains multiple soil strata logs and the `logID` argument is not specified, `runTemplateData()` will use the first recorded logID in the imported data to characterize the subsurface, as in this example:  
+
+```{r}
+#Run the JEM using the imported template data without specifying a logID
+jemOutput <- runTemplateData(imported_data_lx, contaminant = "Tetrachloroethylene", use_aggregate_data_in_det_simulation = TRUE)
+```
+
+In this case, MW01 was the first logID, so the simulation again used the soil strata data associated with MW01 to characterize the subsurface soils. However, in addition to the results, the function also returned a warning message to acknowledge that the imported data set contained data for multiple soil strata logs and to identify the log data used in the simulation. For deterministic simulations run using `runTemplateData()`, if the imported dataset has information for multiple soil strata logs and a logID is not specified in the function arguments, the program will characterize the subsurface soils using data from the first logID loaded and will return a warning message that identifies the logID used. 
+
+For sites where any of the imported soil strata logs might reasonably characterize the subsurface beneath the building, the example below shows how to obtain separate deterministic simulation results for each imported log. The code first obtains the unique logIDs loaded in the template, then uses `lapply()` to iterate through them and execute the `runTemplateData()` function using each logID. The output from `lapply()` in this case is a multi-level list. The first level of the output list has one element for each imported logID, and the next level has the `runTemplateData()` output generated using each logID. In this example, the first level has three elements for logIDs MW01, MW02, and MW03, and the next level has 18 elements, one for each detected tetrachloroethylene and trichloroethylene record in the imported concentration data. The individual contaminant record results include the information previously discussed in the "Simulation Output" section of this document.
+
+```{r}
+#Get the unique logIDs in the imported data set
+imported_logIDs <- unique(imported_data_lx[[4]]$LogID)
+
+#Run the deterministic simulations using each logID separately
+jemOutput_all_logIDs <- lapply(seq_along(imported_logIDs), function(log_index){
+  logID_to_evaluate <- imported_logIDs[log_index]
+  return(runTemplateData(imported_data_lx, logID = logID_to_evaluate))
+})
+
+#Name the output list elements based on the logID used in each simulation.
+names(jemOutput_all_logIDs) <- imported_logIDs
+
+#Print the number of elements in the lapply output list
+print(length(jemOutput_all_logIDs))
+
+#Print the number of simulation results associated with logID MW03
+print(length(jemOutput_all_logIDs$MW03))
+
+#Print the names of the elements associated with one simulation result
+print(names(jemOutput_all_logIDs$MW03[[1]]))
+
+```
+
+### Running the JEM Using runJE()
+
+The `runTemplateData()` wrapper function helps simplify running the JEM using the data import template. If greater flexibility is desired, however, the JEM can also be run by inputting the required model inputs into R and calling `runJE()` directly. The `runJE()` function requires five inputs, all of which are data frames in deterministic simulations.
+
+The code below reruns the imported JEM scenario with the required information entered directly into `runJE()`. The settings, building, and vadose zone parameter data frames have the same format as those from the `importTemplateData()` output list. The soil strata log data frame also has the same format but must contain data for only one soil strata log. In this example, the imported data are filtered down to just those associated with log MW01.
+
+The only input with a different structure is the contaminant data frame. The contaminant data frame requires the specification of three variables: the contaminant name, the contaminant concentration, and the concentration units. The field names for these three variables are `Contaminant`, `Cmedium`, and `Units`, respectively. For groundwater simulations, the units must be either "ug/L" or "ppb", and for soil gas simulations, the units must be either "ug/m3" or "ppb". The tetrachloroethylene concentration entered below is the same value used in the previous example in which the imported tetrachloroethylene data were aggregated into a single overall statistic. 
+
+As shown in the `identical()` function call at the end of the example, the results generated by entering the data directly into `runJE()` are the same as those produced using `runTemplateData()`.
+
+```{r}
+#Build a data frame of contaminant data
+contaminant_data_dfx <- data.frame(
+  Contaminant = "Tetrachloroethylene",
+  Cmedium = 18.5,
+  Units = "ug/L"
+)
+
+#Get the remaining data frames from the imported template data
+
+#extract the building data
+building_data_dfx <- imported_data_lx[[2]]
+#extract the source data
+source_data_dfx <- imported_data_lx[[3]]
+#extract the strata log data and subset it to the data from well MW01.
+strata_log_dfx <- imported_data_lx[[4]] %>% filter(LogID == "MW01")
+#extract the settings
+settings_dfx <- imported_data_lx[[5]]
+
+#Run the JEM with the relevant information directly entered into runJE
+runJEOutput <- runJE(contaminant_data_dfx, building_data_dfx, source_data_dfx, strata_log_dfx, settings_dfx)
+
+#Confirm that the data frames are identical
+identical(jemOutput[[1]]$JEMResults, runJEOutput)
+```
+
+### Soil Gas Simulations
+
+In addition to the groundwater example shown above, the JEM also supports simulation of exterior and subslab soil gas simulations. USEPA's v6.0 JEM spreadsheet documentation recommends that users conduct a subslab soil gas simulation for any soil gas samples collected within one meter of the base of the building foundation and use an exterior soil gas simulation for any soil gas samples collected beyond that depth [USEPA 2017].
+
+The JEM model assumes input data represent conditions beneath the building footprint. Vertical profiles of soil gas concentration(s) can be very different beneath buildings compared to locations exterior to the building, and soil gas concentrations may not be uniform laterally, particularly in the building's vicinity, even when the vapor source is a laterally extensive plume of contaminated groundwater [USEPA 2015]. The reliability of using exterior soil gas concentration inputs should be considered with respect to lateral distance from the building, depth, and location relative to the source, as shown in Figure 55 of USEPA’s *Conceptual Model Scenarios of the Vapor Intrusion Pathway* [USEPA 2012].
+
+Examples of the conceptual site model images for subslab and exterior soil gas simulations for the same building in the imported dataset are shown below. Both images are similar to the previous site model images, except that the groundwater source has been replaced by a soil gas sample. Neither subslab nor exterior soil gas simulations require groundwater data to proceed. In both types of simulations, L<sub>s</sub> represents the depth to the measured soil gas sample and T<sub>s</sub> represents the average temperature of the vadose zone. All other input parameters are as defined previously.
+
+```{r}
+#Get the imported settings data  
+subslab_soil_gas_settings_dfx <- imported_data_lx[[5]]
+  
+#Change the source medium to subslab soil gas
+subslab_soil_gas_settings_dfx$source_medium <- "Subslab Soil Gas"
+
+#Create a new conceptual site model figure object
+subslab_soil_gas_figure <- SiteModelFig$new(subslab_soil_gas_settings_dfx)
+  
+#Generate the figure within the object
+subslab_soil_gas_figure$createStandardFigure()
+```
+```{r, fig.width = subslab_soil_gas_figure$fig_width, fig.height = subslab_soil_gas_figure$fig_height}
+#Plot the subslab soil gas conceptual site model image
+plot(subslab_soil_gas_figure$fig_image)
+```
+
+```{r}
+#Get the imported settings data  
+exterior_soil_gas_settings_dfx <- imported_data_lx[[5]]
+  
+#Change the source medium to exterior soil gas
+exterior_soil_gas_settings_dfx$source_medium <- "Exterior Soil Gas"
+
+#Create a new conceptual site model figure object
+exterior_soil_gas_figure <- SiteModelFig$new(exterior_soil_gas_settings_dfx)
+  
+#Generate the figure within the object
+exterior_soil_gas_figure$createStandardFigure()
+```
+
+```{r, fig.width = exterior_soil_gas_figure$fig_width, fig.height = exterior_soil_gas_figure$fig_height}
+#Plot the exterior soil gas conceptual site model image
+plot(exterior_soil_gas_figure$fig_image)
+```
+
+The following example demonstrates an exterior soil gas simulation of a residential building with a basement with dirt floor foundation. In this example, the data frames input into `runJE()` are created directly in R rather than with a copy of the data import template.
+
+The settings data frame identifies the source as exterior soil gas and specifies that it is a residential building with a basement with dirt floor foundation. It also specifies that the simulation will be a deterministic simulation. Note that some of the parameter values are different than the options allowed in the data import template spreadsheet. For example, the simulation type is represented by "DET" rather than "Deterministic", and the foundation type is "Basement-dirt" rather than "Basement w/ Dirt Floor". These values reflect the data transformations that normally occur in the `importTemplateData()` function and which must be completed manually if that function is not used.
+
+The `checkModelInputs()` function within `runJE()` automatically screens the model inputs and will throw an error if a parameter value is not entered correctly. In addition, `checkModelInputs()` also tests that numeric building and vadose zone parameter values are within the ranges specified in the USEPA v6.0 JEM spreadsheet [USEPA 2017]. The function will return a warning for any parameter values that are outside of an anticipated range.
+
+```{r}
+#Create the settings data frame
+settings_dfx <- data.frame(
+  source_medium = "Exterior Soil Gas",
+  simulation_type = "DET",
+  simulate_capillary_zone = TRUE,
+  building_setting = "Residential",
+  foundation_type = "Basement-dirt",
+  number_of_monte_carlo_iterations = NA
+)
+
+```
+
+The building parameters specified in the following data frame are all default values for a residential building with a basement with dirt floor foundation. The parameter units are identified in a comment next to each parameter value since `runJE()` assumes that the building parameter values are already entered in the appropriate units. Unlike the `importTemplateData()` function, which performs unit conversions for the units allowed in the data import template, `runJE()` does not support unit conversions.
+
+```{r}
+#Create the building data frame
+building_data_dfx <- data.frame(
+  Abf = 150, #m2
+  ach = 0.45, #1/hr
+  eta = 1, #dimensionless
+  Hb = 3.66, #m
+  Lb = 2, #m
+  Lf = 0, #m 
+  Qsoil_Qb = NA #dimensionless
+)
+```
+
+The vadose zone data frame below specifies that the depth to the exterior soil gas sample is 5 m and the average vadose zone temperature is 20 $^\circ$ C. Similar to the building information data frame, the vadose zone parameter units are not entered directly since `runJE()` assumes that L<sub>s</sub> and T<sub>s</sub> are already entered in meters and degrees Celsius, respectively.
+
+```{r}
+#Create the vadose zone data frame
+source_data_dfx <- data.frame(
+  Ls = 5, #m
+  Ts = 20 #degrees Celsius
+)
+```
+
+The contaminant data frame specifies that the contaminant is tetrachloroethylene and that the exterior soil gas sample measured concentration is 3.2 μg/m^3^.
+
+```{r}
+#Create the contaminant data frame
+contaminant_data_dfx <- data.frame(
+  Contaminant = "Tetrachloroethylene",
+  Cmedium = 3.2,
+  Units = "ug/m3"
+)
+```
+
+The soil strata data frame contains information for only one strata log, which has a LogID of "SG1". The log identifies four soil layers beneath the building, each with thicknesses between 1 m and 2 m. The layers are entered in order of increasing depth as specified by their LayerOrder numbers. The sand layer is the shallowest and is followed by the sandy clay layer, and then the clay layer. The sandy clay loam layer is the deepest of the four. The layers and their relative thicknesses can be visualized using the `StrataProfileFig` class, as shown below.
+
+```{r}
+#Create the soil strata log data frame
+strata_log_dfx <- data.frame(
+  LogID = c("SG1", "SG1", "SG1", "SG1"),
+  LayerOrder = c(1, 2, 3, 4),
+  SoilType = c("Sand", "Sandy Clay", "Clay", "Sandy Clay Loam"),
+  Thickness = c(1.6, 1.2, 1.3, 1.9)
+)
+
+#Create a new strata profile figure object with data from the SG1 log
+sg1_strata_figure <- StrataProfileFig$new(strata_log_dfx)
+
+#Create the standard strata profile figure within the object
+sg1_strata_figure$createStandardFigure()
+
+```
+```{r, fig.width = sg1_strata_figure$fig_width, fig.height = sg1_strata_figure$fig_height}
+#Plot the soil strata profile figure
+plot(sg1_strata_figure$fig_image)
+```
+
+The following code inputs the data frames for the exterior soil gas simulation into `runJE()` and uses `pullResults()` to display the results.
+
+```{r}
+#Run the simulation
+exterior_soil_gas_results <- runJE(contaminant_data_dfx, building_data_dfx, source_data_dfx, strata_log_dfx, settings_dfx)
+
+#Get organized output tables from the JEM simulation
+resultTables <- pullResults(exterior_soil_gas_results) 
+
+#Store output table names
+resultTableNames <- names(resultTables)
+
+#Format numeric values                                
+resultTables <- sapply(1:length(resultTables), function(i){
+  resultTables[[i]] <- resultTables[[i]] %>% mutate(Value = as.character(signif(Value, 3)))
+}, simplify = FALSE, USE.NAMES = TRUE)
+
+#Reassign output table names
+names(resultTables) <- resultTableNames
+
+#Display the output variable table
+knitr::kable(resultTables$output, row.names = F)
+
+#Display the ABC parameter table
+knitr::kable(resultTables$abc_parameter, row.names = F)
+
+#Display the subsurface calculation table
+knitr::kable(resultTables$subsurface, row.names = F)  
+
+#Display the source table
+knitr::kable(resultTables$source, row.names = F)  
+
+#Display the building parameter table
+knitr::kable(resultTables$building, row.names = F)  
+```
+
+## References
+
+[GSI] GSI Environmental Inc. 2012. User's manual---BioVapor: a 1-D vapor intrusion model with oxygen-limited aerobic biodegradation. American Petroleum Institute (API): Houston, Texas. November 2012.
+
+[USEPA] United States Environmental Protection Agency. 2012. Conceptual model scenarios for the vapor intrusion pathway. EPA 530-R-10-003. Office of Solid Waste and Emergency Response: Washington, DC. February 2012.
+
+[USEPA] United States Environmental Protection Agency. 2015. OSWER technical guide for assessing and mitigating the vapor intrusion pathway from subsurface vapor sources to indoor air. OSWER Publication 9200.2-154. Office of Solid Waste and Emergency Response: Washington, DC. June 2015.
+
+[USEPA] United States Environmental Protection Agency. 2017. Documentation for EPA's implementation of the Johnson and Ettinger model to evaluate site specific vapor intrusion into buildings. Version 6.0. Office of Superfund Remediation and Technology Innovation: Washington, DC.

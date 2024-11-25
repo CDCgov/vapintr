@@ -1,0 +1,565 @@
+---
+title: "Stochastic Simulations"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{2_Stochastic Simulations}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+
+This vignette provides examples of using _vapintr_ to run stochastic Johnson & Ettinger model (JEM) simulations. It is a follow-up to the Deterministic Simulations vignette, which discusses how to run deterministic simulations in _vapintr_ and provides an introduction to many of the package's basic features. This vignette assumes familiarity with the concepts discussed in the Deterministic Simulations vignette, so if you have not read the Deterministic Simulations vignette, read it first before proceeding with this one. 
+
+The following code loads the _vapintr_ package and the dplyr package, which is used to manipulate data within this vignette. 
+
+```{r setup, warning = FALSE, message = FALSE}
+library(vapintr)
+library(dplyr)
+```
+
+In a stochastic simulation, model input parameters are defined by distributions rather than fixed constants, and model outputs are evaluated using the Monte Carlo method. The Monte Carlo method is a computational technique that involves running a large number of iterations of a model to better understand its output. In a single Monte Carlo iteration, a set of input values is sampled at random from the modeled input parameter distributions and is used to calculate a set of output values. After numerous iterations, distributions are obtained for the model output variables which can be analyzed statistically to identify the range of possible outcomes and the likelihood of different scenario results.
+
+A stochastic JEM simulation uses the same model input parameters as a deterministic simulation. Stochastic simulations can be performed for all the same media, building types, and foundation types as deterministic simulations, and can be run either by calling _vapintr_'s `runJE()` function directly or by using _vapintr_'s data import template. With the data import template, stochastic simulations are conducted by setting the "Simulation type" parameter on the Settings sheet to "Stochastic".
+
+This vignette uses data for a stochastic simulation saved in a copy of the data import template that accompanies the package. The template copy is named "Stochastic_Simulation_Example_Data.xlsx" and is saved in the extdata subfolder of the _vapintr_ package installation folder. You can use the following command to open the data file and follow along with the vignette: `shell.exec(file = system.file("extdata", "Stochastic_Simulation_Example_Data.xlsx", package = "vapintr"))`. 
+
+The following script saves a path to the template file and imports the data using the `importTemplateData()` function. The function returns a list with six elements, one for each data entry sheet in the data import template. The imported simulation settings are stored as a data frame in the fifth element of the returned list object. In the settings data frame, the value of the `simulation_type` field is "MC", which stands for "Monte Carlo" and is the simulation type code that _vapintr_ uses for stochastic simulations.
+
+```{r}
+#Get import data file path
+import_data_file_path <- system.file("extdata", "Stochastic_Simulation_Example_Data.xlsx", package = "vapintr")
+
+#Import the file data
+imported_data_lx <- importTemplateData(import_data_file_path)
+
+#Assign transposed settings data to a new variable
+transposed_settings_data <- t(imported_data_lx[[5]])
+
+#Change row names to a column and assign column names for display
+transposed_settings_data <- cbind(rownames(transposed_settings_data), data.frame(transposed_settings_data, row.names = NULL))
+colnames(transposed_settings_data) <- c("Field Name", "Field Value")
+
+#Create a table using the settings data frame
+knitr::kable(transposed_settings_data, "simple")
+
+```
+
+### Uncertainty and Variability Iterations
+
+The _vapintr_ package uses the _mc2d_ package to implement stochastic simulations. The _mc2d_ package provides tools for performing one- and two-dimensional Monte Carlo simulations that reflect variability and uncertainty in model inputs [Pouillot et al. 2022]. Variability refers to the inherent heterogeneity of data and uncertainty refers to a lack of data or an incomplete understanding of the system analyzed. Variability in a system cannot be reduced, but uncertainty can be reduced or eliminated with better information about the modeled system [USEPA 2022].
+
+Characterization of variability and uncertainty in JEM simulations would require knowledge of both parameter value distributions and the uncertainty associated with those distributions. Because parameter variability and uncertainty are not well-characterized at most sites, _vapintr_ does not evaluate both variability and uncertainty. Instead, it uses a one-dimensional Monte Carlo framework which evaluates only uncertainty. This framework is implemented with the _mc2d_ package by assigning data only for the uncertainty dimension of each input parameter.
+
+The Number of Monte Carlo iterations parameter on the Settings tab of the data import template specifies the number of uncertainty iterations that each simulation will perform. All the simulations in this vignette perform 1,000 Monte Carlo iterations of the JEM, which we determined by checking convergence properties of the simulation as discussed below in [Checking Convergence](#convergence).
+
+### Imported Building and Vadose Zone Parameter Data Distributions
+
+The BuildingInfo and VadoseZoneInfo sheets of _vapintr_'s data import template allow for building and vadose zone parameters to be defined using distributions instead of constant values. The data import template supports six distribution types which are listed below, along with the parameters required to characterize each distribution.
+
+-   **Constant**: Constant
+-   **Uniform**: Maximum and Minimum
+-   **Triangular**: Maximum, Mode, and Minimum
+-   **PERT**: Maximum, Mode, and Minimum
+-   **Truncated Normal**: Maximum, Mean, Standard Deviation, and Minimum
+-   **Truncated Lognormal**: Maximum, Geometric Mean, Geometric Standard Deviation, and Minimum
+
+The PERT (or Program Evaluation and Review Technique) distribution is a transformation of the beta distribution into a three-parameter distribution with the same input parameters as the triangular distribution. The PERT distribution is smoother than the triangular distribution and places greater emphasis on the mode and less emphasis on the extreme values.
+
+The truncated normal and lognormal distributions are similar to the regular normal and lognormal distributions, except that they both place limits on the minimum and maximum of the sampled values. The truncated lognormal distribution parameters all represent statistics of the natural data and not the log-transformed data.
+
+In the data import template, values in the DistributionParameterType field update automatically based on values selected in the Distribution field. Any DistributionParameterType and DistributionParameterValue cells that are grayed out are not needed to characterize the selected distribution.
+
+The _vapintr_ package stores data for input parameter distributions in `JEMParamDist` class objects. The `JEMParamDist` class is a custom R6 class developed for _vapintr_ that contains methods for validating and sampling from _vapintr_'s supported distributions. For stochastic simulations run using the data import template, `importTemplateData()` automatically generates lists of `JEMParamDist` objects using information from the template's BuildingInfo and VadoseZoneInfo sheets. The second element of the list object returned by `importTemplateData()` contains a list of `JEMParamDist` objects for the building parameters, and the third element contains a list of `JEMParamDist` objects for the vadose zone parameters.
+
+`JEMParamDist` objects have a private `JEMSymbol` property which identifies the parameter defined by the object. The object's `getSymbol()` method retrieves the value of the `JEMSymbol` property. The first part of the example below uses the `getSymbol()` method to identify the `JEMParamDist` object associated with the indoor air exchange rate (ach) in the imported building data. The second part uses the object's `getDataFrameOfPropreties()` method to generate a data frame of the properties associated with the object. In the imported data set, the indoor air exchange rate is characterized by a PERT distribution with a maximum, mode, and minimum of 1.26, 0.45, and 0.15 air changes per hour, respectively. Any parameters not required for the distribution have a value of `"NA"`.
+
+```{r}
+#Assign building data to an object
+building_data <- imported_data_lx[[2]]
+
+#Get the JEMParamDist object associated with the indoor air exchange rate
+ach_dist <- Filter(function(x) x$getSymbol() == "ach", building_data)[[1]]
+
+#Get a data frame of parameters associated with the indoor air exchange rate
+ach_properties <- ach_dist$getDataFrameOfProperties()
+
+#Transpose the data frame
+ach_properties <- t(ach_properties)
+
+#Change row names to a column and assign column names for display
+ach_properties <- cbind(rownames(ach_properties), data.frame(ach_properties, row.names = NULL))
+colnames(ach_properties) <- c("Field Name", "Field Value")
+
+#Format numeric values                                
+ach_properties <- ach_properties %>% dplyr::mutate_if(is.numeric, list(~as.character(signif(., 3))))
+
+#Create a table using the data frame
+knitr::kable(ach_properties, "simple")
+
+```
+
+### Default Building Parameters
+
+Similar to deterministic simulations, stochastic simulations can also use default building parameters by setting "Apply default building parameters" to "Yes" on the template Settings sheet. The default building parameters applied in stochastic simulations are based on the default values and parameter ranges identified in version 6.0 of USEPA's JEM spreadsheet [USEPA 2017]. In general, for parameters that had a default value and range provided, _vapintr_ uses a PERT distribution with a mode defined by the default value and a minimum and maximum defined by the range. If the default value was the same as either the minimum or maximum, _vapintr_ uses a triangular distribution instead since the PERT distribution does not allow the mode to be the same as the minimum or maximum.
+
+The example below uses _vapintr_'s `getBuildingDefaults()` function to show the default stochastic simulation parameters for a residential building with a slab-on-grade foundation. The depth below grade to base of foundation and the foundation thickness are both defined by triangular distributions because their default values in USEPA's JEM spreadsheet are the same as their minimum values. All the other parameters are defined using PERT distributions because their default values were in between their ranges' maximum and minimum values.
+
+```{r}
+#Create a table of the default building parameters for a residential building with a slab-on-grade foundation
+building_defaults <- getBuildingDefaults("Residential","Slab-grade","MC")
+
+#Rename columns to make them easier to read
+colnames(building_defaults) <- c(
+   "Parameter", "Units", "JEM Symbol", "Distribution", 
+   "Distribution Parameter Type", "Distribution Parameter Value"
+)
+
+#Format the numeric values
+building_defaults <- building_defaults %>% dplyr::mutate_if(is.numeric, list(~as.character(signif(., 3))))
+
+#Display the table
+knitr::kable(building_defaults, "simple")
+```
+
+### Soil Strata and Concentration Data
+
+As in deterministic simulations, concentration data and soil strata data frames are stored in the first and fourth elements of the `importTemplateData()` output list, respectively. These data frames have the same structure for both deterministic and stochastic simulations, and the `runTemplateData()` function can again be used in stochastic simulations to specify a soil strata log and contaminant for evaluation. The function inputs are the same for both simulation types---the first input is the `importTemplateData()` output list, the second is the name of the contaminant to be simulated, and the third is the optional LogID of the soil strata log to characterize the subsurface. If a contaminant name is not entered, _vapintr_ will perform Monte Carlo simulations on each contaminant with detections in the source medium, and if a LogID is not entered, _vapintr_ will randomly sample an imported soil strata log for each Monte Carlo iteration. The fourth input argument, `use_aggregate_data_in_det_simulation`, is not considered in stochastic simulations.
+
+In stochastic simulations, the `runTemplateData()` function generates a `JEMParamDist` object to characterize the distribution of observed contaminant concentrations. As in deterministic simulations in which contaminant concentrations are aggregated, `runTemplateData()` first identifies the median detected concentration at each unique sample location in the imported contaminant data. It then generates a `JEMParamDist` object to represent those data using a PERT distribution. The distribution minimum is the minimum detected concentration from any location, the mode is the median of the median detected concentrations from each location, and the maximum is the maximum detected concentration from any location.
+
+The example data import template for this vignette includes trichloroethylene groundwater observations from five monitoring wells collected during three yearly sampling events, as shown in the table below. Trichloroethylene was detected in only three of the five wells: MW01, MW02, and MW04. In MW03 and MW05, the trichloroethylene observations were all nondetects. The median detected concentrations in wells MW01, MW02, and MW04 were 53 micrograms per liter (μg/L), 19 μg/L, and 20 μg/L, respectively. The median of these three median concentrations is 20 μg/L. The maximum detected concentration of 61 μg/L was observed in well MW01, and the minimum detected concentration of 14 μg/L was observed in well MW02.
+
+```{r}
+#Save the contaminant data in a variable
+contaminant_data_dfx <- imported_data_lx[[1]]
+
+#Subset the data to just the groundwater records
+contaminant_data_dfx <- contaminant_data_dfx %>% filter(Medium == "Groundwater")
+
+#Filter out the CASRN field to make the tables easier to read.
+contaminant_data_dfx <- contaminant_data_dfx %>% select(-CASRN)
+
+#Format dates
+contaminant_data_dfx <- contaminant_data_dfx %>% mutate(SampleDate = format(as.Date(SampleDate,origin = "1899-12-30"),"%m/%d/%Y"))
+
+#Create a table of the concentration data
+knitr::kable(contaminant_data_dfx)
+```
+
+The table below shows the property values of the `JEMParamDist` object that `runTemplateData()` generates to characterize these concentrations. The object is assigned a PERT distribution with a maximum of 61 μg/L, a mode of 20 μg/L, and a minimum of 14 μg/L. For cases where only one unique detected value is present and the minimum, median, and maximum detected concentrations are all equal, the `JEMParamDist` object will use a constant instead of a PERT distribution.
+
+```{r}
+#Save the contaminant data in a variable
+contaminant_data_dfx <- imported_data_lx[[1]]
+
+#Assign the imported settings data to a data frame
+settings_dfx <- imported_data_lx[[5]]
+
+#Create the JEMParamDist for the imported trichloroethylene data
+contaminant_data <- getInputConc(contaminant_data_dfx, "Trichloroethylene", settings_dfx$source_medium, settings_dfx$simulation_type)
+
+#Get a data frame showing the parameters associated with the concentration data
+contaminant_data_properties <- contaminant_data[[1]]$getDataFrameOfProperties()
+
+#Transpose the data frame
+contaminant_data_properties <- t(contaminant_data_properties)
+
+#Change row names to a column and assign column names for display
+contaminant_data_properties <- cbind(rownames(contaminant_data_properties), data.frame(contaminant_data_properties, row.names = NULL))
+colnames(contaminant_data_properties) <- c("Field Name", "Field Value")
+
+#Format numeric values                                
+contaminant_data_properties <- contaminant_data_properties %>% dplyr::mutate_if(is.numeric, list(~as.character(signif(., 3))))
+
+#Create a table using the data frame
+knitr::kable(contaminant_data_properties, "simple")
+
+```
+
+## Running Stochastic Simulations
+
+The same functions for running deterministic simulations in _vapintr_ also run stochastic simulations. The `runJE()` function is the primary function in _vapintr_ for running the JEM, and the `runTemplateData()` function is a wrapper for `runJE()` that facilitates processing of data from the data import template. In addition, the same conceptual site model and soil strata log visualization tools provided for deterministic simulations also apply for stochastic simulations.
+
+The images below show the conceptual site model and soil strata logs included in the example data imported for this vignette. The conceptual site model shows a groundwater source beneath a residential building that has a closed crawl space with slab foundation. The subsurface beneath the building is characterized by three soil strata logs.
+
+```{r}
+#Create a new SiteModelFig object using the imported settings data
+site_model_figure <- SiteModelFig$new(imported_data_lx[[5]])
+
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+```{r}
+#Create a new strata profile figure object
+strata_figure <- StrataProfileFig$new(imported_data_lx[[4]])
+
+#Generate the standard soil strata figure
+strata_figure$createStandardFigure()
+```
+```{r, fig.width = strata_figure$fig_width, fig.height = strata_figure$fig_height}
+#Plot the soil strata figure
+plot(strata_figure$fig_image)
+```
+
+### Running Stochastic Simulations Using runTemplateData()
+
+The example below executes the `runTemplateData()` function on the imported template data. Because a contaminant name is not provided, _vapintr_ will run a Monte Carlo simulation on each contaminant with groundwater detections in the imported data set, which in this case is just trichloroethylene. Because a LogID was not specified in the inputs to `runTemplateData()`, the function randomly samples from the three imported soil logs to characterize the subsurface in each iteration.
+
+Within `runTemplateData()`, a `JEMParamDist` object is created to represent the distribution in imported trichloroethylene concentrations in groundwater. All needed data are then passed to `runJE()`, which performs 1,000 Monte Carlo iterations on the model inputs, as specified by the Number of Monte Carlo iterations parameter imported with the Settings data. 
+
+```{r}
+#Run a stochastic simulation for each contaminant with groundwater detections in the imported data
+jemOutput <- runTemplateData(imported_data_lx)
+```
+
+As for deterministic simulations in which contaminant data are aggregated, the output of `runTemplateData()` is a list with one element per simulated contaminant. Each element contains a named list with fields identifying the contaminant simulated, the output of `runJE()`, and any errors or warnings generated during the simulation.
+
+```{r}
+#Print the number of elements in the output data set
+print(length(jemOutput))
+
+#Print the names of the elements in the output list
+print(names(jemOutput[[1]]))
+```
+
+Unlike in deterministic simulations, however, in stochastic simulations the data output to the JEMResults field from `runJE()` is an `mc` object instead of a data frame. The `mc` object class is defined by the _mc2d_ package and contains a list of `mcnode` objects. Each `mcnode` object contains the sampled or calculated Monte Carlo values from all iterations for a specific input parameter or output variable. Calling specific `mcnode` objects generates summary statistics related to the variable of interest, as shown below for the calculated indoor air concentrations in this scenario. The minimum, median, mean, and maximum concentrations reported all have units of micrograms per cubic meter (μg/m^3^).
+
+```{r}
+#Show the class of the object stored in the JEMResults field
+print(class(jemOutput[[1]]$JEMResults))
+
+#Print the mcnode output for the calculated indoor air concentrations (Cia)
+print(jemOutput[[1]]$JEMResults$Cia)
+
+```
+
+The `pullResults()` function in _vapintr_ returns organized summary statistics for input parameters and output variables from the stochastic simulation. For each input parameter or output variable, the function returns the minimum, median, 95^th^ percentile, and maximum. Data are output in a named list with five elements which have the same names and contain information on the same variables as those generated by `pullResults()` for a deterministic simulation. As an example, the table below shows statistics for the output variable data frame for the simulation conducted using the imported data set.
+
+```{r}
+#Get organized tables from the JEM simulation
+resultTables <- pullResults(jemOutput[[1]]$JEMResults) 
+
+#Format the output variable values for printing
+output_table <- resultTables$output %>% dplyr::mutate_if(is.numeric, list(~as.character(signif(., 3))))
+
+#Generate a table showing the output variable values
+knitr::kable(output_table, row.names = F)
+```
+
+The `pullResults()` function can also return tables showing input parameter and output variable values for a specific Monte Carlo iteration by passing an iteration number as a second parameter. These tables have the same structure as the outputs for a deterministic simulation and can be used to verify output from specific iterations in the stochastic simulations. The example below shows the output variable table for the 100^th^ Monte Carlo iteration of the 1,000 performed for the example simulation, which we determined was sufficient by checking convergence properties of the simulation as discussed below (see [Checking Convergence](#convergence)).
+
+```{r}
+#Get organized output tables from the 100th Monte Carlo iteration simulation
+resultTables <- pullResults(jemOutput[[1]]$JEMResults, 100) 
+
+#Format the output variable values for printing
+output_table <- resultTables$output %>% mutate(Value = as.character(signif(Value, 3)))
+
+#Generate the output variable table
+knitr::kable(output_table, row.names = F)
+
+```
+
+#### Checking Convergence{#convergence}
+
+Convergence of a node of the Monte Carlo simulation can be checked by plotting the cumulative mean, median, 97.5^th^ and 2.5^th^ percentiles against the iteration number, for instance, using the  _mc2d_ function `converg`, and inspecting to see if the cumulative statistics have reached a stable value:    
+```{r, fig.width = 6.5}
+mc2d::converg(jemOutput[[1]]$JEMResults$alpha, log = T)
+
+```
+
+### Modeled Concentration Data Violin Plots
+
+The _vapintr_ package includes functionality for visualizing the distribution of calculated indoor air concentrations from the stochastic simulations using violin plots. The violin plots are combinations of box plots and probability density plots that show the range and frequency of modeled indoor air concentrations and also include two bisecting lines that show the 50^th^ and 95^th^ percentiles of the modeled concentrations. Wider sections of the violin plots represent a higher probability of model-predicted indoor air concentrations and narrower sections represent a lower probability.
+
+The _vapintr_ package uses a custom class, `ModelResultFig`, to create figures from the results of a stochastic simulation. The `ModelResultFig` class can produce two types of plots---the first type displays modeled indoor air concentrations in a violin plot, and the second type shows the modeled data violin plot next to a scatter plot of measured indoor and outdoor air concentrations. This vignette provides examples of the basic functionality included within _vapintr_ for creating standard plots of the model output. More information about generating and manipulating `ModelResultFig` objects is provided in the Model Result Figures vignette.
+
+The example below demonstrates the creation of a new `ModelResultFig` object using just modeled data. The first parameter passed to `ModelResultFig$new()` is the JEM Monte Carlo simulation output from `runJE()`, the second parameter is the name of the simulated contaminant, the third parameter is the contaminant's Chemical Abstracts Service Registry Number (CASRN), the fourth parameter is the figure concentration units, and the fifth parameter is the source medium of the contaminant data. After initializing the object, the code calls the object's `createStandardFigure()` function to create the output image and then plots the object's `fig_image` property to display it.
+
+```{r}
+#Create a new output figure from the JEM Monte Carlo results
+model_result_figure <- ModelResultFig$new(jemOutput[[1]]$JEMResults, "Trichloroethylene", "79-01-6", "ug/m3", "groundwater")
+
+#Create the standard plot image from the model_result_figure object
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+### Measured and Reference Concentration Data Plots
+
+If available, measured air concentration data can be added in a scatter plot next to the violin plot. The scatter plot y-axis uses the same concentration scale as the violin plot, and the x-axis identifies the date the measurements were collected. The measured data plots can display both detects and nondetects of indoor and outdoor air measurements. Measured air data can be added to the ContaminantData sheet in the data import template and are exported in the first element of the `importTemplateData()` output list along with the measured subsurface data.
+
+Reference air concentrations, such as contaminant screening levels or representative background concentrations, can also be incorporated into the measured data plots. The standard measured data plot can include up to four reference concentrations which appear as horizontal lines spanning the width of the plot. Reference air concentration data can be added to the ReferenceAirConcentrations sheet in the data import template and are exported in the sixth element of the `importTemplateData()` output list.
+
+The code below shows an example of a standard measured and modeled data figure generated using the `ModelResultFig` class that includes two reference concentrations. As before, the figure is generated by first creating a new instance of the class. The first five parameters passed to `ModelResultFig$new()` are the same as in the previous example, the sixth parameter is the imported measured concentration data frame, and the seventh parameter is the reference air concentration data frame. As before, calling the object's `createStandardFigure()` function creates the standard data plot, and calling `plot()` on the object's `fig_image` property displays the image.
+
+```{r}
+#Create a new output figure that also includes the measured concentration data output from the import data template and the reference data
+model_result_figure <- ModelResultFig$new(jemOutput[[1]]$JEMResults, "Trichloroethylene", "79-01-6", "ug/m3", "groundwater", imported_data_lx[[1]], imported_data_lx[[6]])
+
+#Generate the standard output plot with the modeled data next to the measured and reference air data
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+### Run a Stochastic Simulation Using runJE()
+
+Similar to deterministic simulations, _vapintr_ can run stochastic simulations directly with `runJE()` without requiring the data import template. The examples below show how to assemble the data structures needed to run a stochastic simulation directly with `runJE()`.
+
+The settings_data input into `runJE()` has the same structure in deterministic and stochastic simulations. To perform a stochastic simulation, the simulation_type must be set to `"MC"`. The settings below are for a stochastic simulation of an exterior soil gas source beneath a residential building with a closed crawl space with dirt floor foundation. The settings parameters reflect the transformations that would have been performed in the `importTemplateData()` function if the data had been loaded from the template. The simulation will perform 1,000 Monte Carlo iterations of the JEM based on the value of the number_of_monte_carlo_iterations field. The conceptual site model for the simulation is shown below.
+
+```{r}
+#Create a settings data frame
+settings_data_dfx <- data.frame(
+  source_medium = "Exterior Soil Gas",
+  simulation_type = "MC",
+  simulate_capillary_zone = TRUE,
+  building_setting = "Residential",
+  foundation_type = "Crawlspace-dirt",
+  number_of_monte_carlo_iterations = 1000
+)
+
+#Create a new SiteModelFig object using the settings data frame
+site_model_figure <- SiteModelFig$new(settings_data_dfx)
+
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+The strata_logs_data input into runJE also has the same structure in both the deterministic and stochastic simulations. This example includes one soil strata log, which is associated with the exterior soil gas sample location ("SG01") and extends to a depth of 10 meters. The log has only two layers---a sand layer at the surface, followed by a sandy loam layer.
+
+```{r}
+#Create a new data frame of strata profile data
+soil_strata_data_dfx <- data.frame(
+  LogID = c("SG01", "SG01"),
+  LayerOrder = c(1, 2),
+  SoilType = c("Sand", "Sandy Loam"),
+  Thickness = c(5.5, 4.5)
+)
+
+#Create a new strata profile figure object
+strata_figure <- StrataProfileFig$new(soil_strata_data_dfx)
+
+#Generate the standard soil strata figure
+strata_figure$createStandardFigure()
+```
+```{r, fig.width = strata_figure$fig_width, fig.height = strata_figure$fig_height}
+#Plot the soil strata figure
+plot(strata_figure$fig_image)
+```
+
+The building_data input to `runJE()` for stochastic simulations must be a list containing `JEMParamDist` objects for the seven building parameters. `JEMParamDist` objects can be initialized as shown in the examples below. The first parameter is the only required parameter for initializing the distribution and represents the JEM symbol used in the model equations for each parameter. In each case, the symbol corresponds with the parameter field name in the deterministic data frame. The `runJE()` function uses these symbols to retrieve each parameter for calculations, which is why they are required. All the other parameters are optional but may be required depending on the distribution type selected. The values entered here show the parameters required for all six of _vapintr_'s supported distributions.
+
+```{r}
+#Create a JEMParamDist object for Lb
+Lb_dist <- JEMParamDist$new("Lb",
+                            name = "Depth below grade to base of foundation",
+                            units = "m",
+                            dist_type = "Uniform",
+                            minimum = 0.1,
+                            maximum = 0.5)
+
+#Create a JEMParamDist object for Lf
+Lf_dist <- JEMParamDist$new("Lf",
+                            name = "Foundation thickness",
+                            units = "m",
+                            dist_type = "Constant",
+                            constant = 0)
+
+#Create a JEMParamDist object for eta
+eta_dist <- JEMParamDist$new("eta",
+                             name = "Fraction of foundation area with cracks",
+                             units = "-",
+                             dist_type = "Constant",
+                             constant = 0)
+
+#Create a JEMParamDist object for Abf
+Abf_dist <- JEMParamDist$new("Abf",
+                             name = "Enclosed space floor area",
+                             units = "m²",
+                             dist_type = "PERT",
+                             minimum = 80,
+                             mode = 150,
+                             maximum = 200)
+
+#Create a JEMParamDist object for Hb
+Hb_dist <- JEMParamDist$new("Hb",
+                            name = "Enclosed space mixing height",
+                            units = "m",
+                            dist_type = "Triangular",
+                            minimum = 0.5,
+                            mode = 1.3,
+                            maximum = 1.3)
+
+#Create a JEMParamDist object for ach
+ach_dist <- JEMParamDist$new("ach",
+                             name = "Indoor air exchange rate",
+                             units = "1/hr",
+                             dist_type = "Truncated Normal",
+                             minimum = 0.15,
+                             arith_mean = 0.45,
+                             arith_stdev = 0.1,
+                             maximum = 1.26)
+
+#Create a JEMParamDist object for Qsoil_Qb
+Qsoil_Qb_dist <- JEMParamDist$new("Qsoil_Qb",
+                                  name = "Qsoil/Qbuilding",
+                                  units = "-",
+                                  dist_type = "Truncated Lognormal",
+                                  minimum = 0.0001,
+                                  geom_mean = 0.003,
+                                  geom_stdev = 1.4,
+                                  maximum = 0.01)
+
+#Assemble the JEMParamDist objects into a list
+building_data_lx <- list(Lb_dist, Lf_dist, eta_dist, Abf_dist, Hb_dist, ach_dist, Qsoil_Qb_dist)
+```
+
+The vadose_zone_data list contains `JEMParamDist` objects for the depth below grade to source and the average source temperature. In the example below, the depth below grade to source is assigned a constant value associated with the soil gas sample depth, and the average source temperature is assigned a custom distribution. Custom distributions are not supported by the _vapintr_ data import template but can be entered directly into a `JEMParamDist` object within R. This functionality allows users to input distributions not directly supported within the data import template.
+
+To apply a custom distribution, set the `JEMParamDist` object's `dist_type` property to `"Custom"` and input the data for the custom distribution into the object's `custom_distribution_data` property. The assigned data must be entered as an `mcnode` object, which can be developed using the _mc2d_ package's `mcstoc()` function. The example below enters custom data developed using a truncated gamma distribution for the average source temperature. The type parameter is set to `"U"` because _vapintr_ considers only the uncertainty dimension and not the variability dimension in Monte Carlo simulations. The distribution data generated with this function will be directly applied in the Monte Carlo iterations within `runJE()`.
+
+```{r}
+#Create a JEMParamDist object for Ls
+Ls_dist <- JEMParamDist$new("Ls",
+                            name = "Depth below grade to source",
+                            units = "m",
+                            dist_type = "Constant",
+                            constant = 10)                                           
+#Create a JEMParamDist object for Ts
+Ts_dist <- JEMParamDist$new("Ts",
+                            name = "Average source temperature",
+                            units = "°C",
+                            dist_type = "Custom",
+                            custom_distribution_data = 
+                              mc2d::mcstoc(type = "U", rgamma,
+                                           shape = 15,
+                                           scale = 1,
+                                           linf = 2,
+                                           lsup = 30,
+                                           rtrunc = TRUE))
+
+#Assemble the vadose zone data objects into a list
+vadose_zone_data_lx <- list(Ls_dist, Ts_dist)
+```
+
+The contaminant_data input is a single `JEMParamDist` object that characterizes the distribution of subsurface contaminant concentrations. Suppose we have the following 20 measured soil gas concentrations from the site.
+
+```{r}
+#Create example data frame of soil gas observations
+soil_gas_observations <- data.frame(
+  concentration_ugm3 = c(0.40, 0.52, 0.89, 0.40, 0.50, 0.55, 1.30, 1.20, 2.80, 1.30, 1.60, 0.72, 2.00, 1.00, 0.98, 0.40, 1.10, 0.50, 9.30, 2.70),
+  detected_flag = c(F, T, T, F, T, T, T, T, T, T, T, T, T, T, T, F, T, T, T, T)
+)
+  
+#Display the measured soil gas concentrations
+knitr::kable(soil_gas_observations %>% 
+               mutate(`Concentration (ug/m3)` = concentration_ugm3) %>%
+               mutate(`Detected` = detected_flag) %>%
+               select(-concentration_ugm3, -detected_flag), row.names = F)
+
+```
+
+The underlying distribution for the data is a lognormal distribution, and three of the sample records are non-detects with a reporting limit of 0.40 μg/m^3^. The maximum detected value is 9.30 μg/m^3^. Parameters for the distribution can be estimated using the `fitdistcens()` function from R's fitdistrplus package, as shown below.
+
+```{r, warning = FALSE, message = FALSE}
+library(fitdistrplus)
+```
+```{r}
+
+#Format the data frame for analysis using the fitdistcens function
+#The "left" column value should equal NA for nondetects and the observed value for detections
+#The "right" column value should equal the reporting limit for nondetects and the observed value for detections 
+soil_gas_dist_input_data <- data.frame(
+  left = ifelse(soil_gas_observations$detected_flag == F, NA, soil_gas_observations$concentration_ugm3),     
+  right = soil_gas_observations$concentration_ugm3 
+)
+
+#Get the estimated distribution parameters
+fitdistcens_output_data <- fitdistcens(soil_gas_dist_input_data, "lnorm")
+
+#Get the geometric mean and standard deviation in log space
+geom_mean_log <- fitdistcens_output_data$estimate['meanlog']
+geom_stdev_log <- fitdistcens_output_data$estimate['sdlog']
+```
+In the `JEMParamDist` object used to characterize the contaminant data, the JEM symbol associated with the contaminant concentrations is "Cmedium". In this example, the distribution is characterized as a truncated lognormal distribution with the parameters shown below. The minimum value is zero, the maximum value is the maximum detected value in the observed data, and the geometric mean and standard deviation are assigned based on the values returned by `fitdistcens()`. For lognormal distributions, the `fitdistcens()` function returns the geometric mean and standard deviation in log space, so the code below first converts them to normal space to match the parameterization used for truncated lognormal distributions in _vapintr_.
+
+```{r}
+#Create a JEMParamDist object for the contaminant data
+contaminant_data <- JEMParamDist$new("Cmedium",
+                                     name = "Carbon Tetrachloride",
+                                     units = "ug/m3",
+                                     dist_type = "Truncated Lognormal",
+                                     minimum = 0,
+                                     geom_mean = exp(geom_mean_log),
+                                     geom_stdev = exp(geom_stdev_log),
+                                     maximum = max(soil_gas_observations$concentration_ugm3))
+```
+
+Once all five input objects are built, they can be passed directly to `runJE()` to perform the stochastic simulation. The objects are passed in the same order applied in the deterministic simulations: first the contaminant data, then the building data, then the vadose zone data, then the boring log data, and finally the settings data. Once the simulation is complete, the output can be analyzed using `pullResults()` and the `ModelResultFig` objects discussed previously.
+
+```{r}
+
+#Run the JEM using the assembled data
+runJEOutput <- runJE(contaminant_data, 
+                   building_data_lx, 
+                   vadose_zone_data_lx, 
+                   soil_strata_data_dfx, 
+                   settings_data_dfx)
+```
+
+```{r}
+#Get organized output tables from the JEM simulation
+resultTables <- pullResults(runJEOutput) 
+
+#Format output values for printing
+output_table <- resultTables[[5]] %>% dplyr::mutate_if(is.numeric, list(~as.character(signif(., 3))))
+
+#Generate the output variable tables
+knitr::kable(output_table, row.names = F)
+```
+
+```{r}
+#Create a new output figure from the JEM Monte Carlo results
+model_result_figure <- ModelResultFig$new(runJEOutput, "Carbon Tetrachloride", "56-23-5", "ug/m3", "exterior soil gas")
+
+#Create the standard plot image from the model_result_figure object
+model_result_figure$createStandardFigure()
+```
+
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+## References
+
+Pouillot R, Delignette-Muller ML, Kelly ML, and Denis JB. 2022. The _mc2d_ package. Available at: <https://cran.r-project.org/web/packages/mc2d/vignettes/docmcEnglish.pdf>. Updated November 20, 2022. Accessed June 13, 2023.
+
+[USEPA] United States Environmental Protection Agency. 2017. Documentation for EPA's Implementation of the Johnson and Ettinger Model to Evaluate Site Specific Vapor Intrusion into Buildings. Version 6.0. Office of Superfund Remediation and Technology Innovation: Washington, DC.
+
+[USEPA] United States Environmental Protection Agency. 2022. Uncertainty and Variability. Available at: <https://www.epa.gov/expobox/uncertainty-and-variability#faq1>. Updated November 23, 2022. Accessed June 13, 2023.

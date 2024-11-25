@@ -1,0 +1,474 @@
+---
+title: "Model Result Figures"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{3_Model Result Figures}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.align = "center"
+)
+```
+
+## Introduction
+
+The _vapintr_ package output for a stochastic Johnson & Ettinger Model (JEM) simulation can include thousands of simulated indoor air concentrations. To facilitate display and interpretation of these concentrations, _vapintr_ includes built-in methods for generating figures that summarize the output data. In addition, _vapintr_ also includes standard methods for displaying measured indoor and outdoor air concentrations and plotting those next to modeled data for comparison. This vignette provides a step-by-step guide to creating _vapintr_'s standard modeled and measured data figures and provides examples of how to modify the standard figures to create unique custom images. The following code loads the _vapintr_ package and other packages used to manipulate data and create figures within this vignette. 
+
+```{r setup, warning = FALSE, message = FALSE}
+library(vapintr)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+```
+
+## Creating Standard Figures
+
+The _vapintr_ package can output two types of standard figures---the first type displays modeled indoor air concentrations in a violin plot, and the second type shows the modeled data violin plot next to a scatter plot of measured indoor and outdoor air concentrations. The second type also includes the option of displaying reference concentrations such as screening levels, health guidelines, or typical background concentrations. 
+
+This section shows examples of how to generate _vapintr_'s standard figures using an example dataset included with the package. The example dataset is saved in a copy of the _vapintr_ data import template named `Vignette_data.xlsx`. To view the data file, run the command `shell.exec(file = system.file("extdata", "Vignette_data.xlsx", package = "vapintr"))`. The code below retrieves the path to the data file and imports it into R for use within _vapintr_. 
+
+```{r}
+#Get file path of data to import
+vignette_data_file_path <- system.file("extdata", "Vignette_data.xlsx", package = "vapintr")
+
+#Import data to a new list object that can be run within vapintr
+imported_data_lx <- importTemplateData(vignette_data_file_path)
+```
+
+### Standard Modeled Data Violin Plot
+
+The _vapintr_ package uses violin plots to summarize the stochastic JEM simulation modeled indoor air concentrations. The _vapintr_ violin plots are combinations of box plots and probability density plots that show the range and frequency of the modeled concentrations. Wider sections of the violin plots represent a higher probability of model-predicted indoor air concentrations and narrower sections represent a lower probability. 
+
+The standard figures in _vapintr_ are built using the output of a stochastic simulation performed using the `runJE()` function. For imported template data, this output can be obtained by calling `runTemplateData()` and passing the output from `importTemplateData()` as the only parameter. The imported data in this example include concentration records for only one contaminant, tetrachloroethylene. The imported simulation settings identify the source medium as groundwater, and the building type as residential.
+
+```{r}
+#Run the JEM for the imported data
+jem_results <- runTemplateData(imported_data_lx)
+```
+
+The _vapintr_ package uses a custom class, `ModelResultFig`, to create result figures from the JEM output data. The `ModelResultFig` class has two attributes that store information for the modeled and measured data plots contained within the figure. Information for the modeled data plot is stored in the `mod_data_fig` property of the class, and information for the measured data plot is stored in the `meas_data_fig` property. The objects stored in each of these properties are instances of new custom classes---the `ModDataFig` class stores information for the modeled data violin plots, and the `MeasDataFig` class stores information for the measured air data scatter plots. Both of these classes are children of the parent `ConcDataFig` class, which includes properties that are used within both child classes.
+
+The `ModelResultFig` class will automatically create the appropriate modeled and measured data plot objects when the class is initialized. An instance of the class can be initialized using either just modeled data or both modeled and measured data. Once initialized, a `ModelResultFig` object has all the information it needs to render a standard figure. Calling the object's `createStandardFigure()` method will render an output figure using standard settings. 
+
+The example below demonstrates the creation of a new `ModelResultFig` object using just modeled data. The first parameter passed to `ModelResultFig$new()` is the JEM Monte Carlo simulation output from `runJE()` for the contaminant of interest, which is saved in the JEMResults field of the output list from `runTemplateData()`. The second parameter is the name of the simulated contaminant, the third parameter is the contaminant's Chemical Abstracts Service Registry Number (CASRN), the fourth parameter is the figure concentration units, and the fifth parameter is the source medium of the contaminant data. Calling the object's `createStandardFigure()` function creates the standard data plot and saves it in the `ModelResultFig` object's `fig_image` property and saves the intended width and length of the figure in the object's `fig_width` and `fig_height` properties. The `ModelResultFig` class inherits these properties from the parent `StandardOutputFig` class, which is used to create standard output figures in _vapintr_ at the correct size. The standard `ModelResultFig` images are designed to have a width of 6.5 inches and a height of 6 inches. Calling `plot(model_result_figure$fig_image)` displays the plot image.
+
+```{r}
+#Create a new output figure from the JEM Monte Carlo results
+model_result_figure <- ModelResultFig$new(jem_results[[1]]$JEMResults, "Tetrachloroethylene", "127-18-4", "ug/m3", "groundwater")
+
+#Create the standard plot image from the model_result_figure object
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height =  model_result_figure$fig_height}
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+The standard violin plot identifies the concentration range and frequency of the modeled contaminant concentrations and also includes two lines bisecting the plot that show the 50^th^ and 95^th^ percentiles of the model-predicted indoor air concentrations. Annotations identify their values, and notes at the bottom of the image provide definitions for the abbreviations and a brief explanation of what the violin plot represents. The text parameters passed to `ModelResultFig$new()` are used to create the x- and y-axis labels. In the example figure, the contaminant is identified as tetrachloroethylene in groundwater in the x-axis, and the concentrations are displayed in units of micrograms per cubic meter. Concentrations in the standard images can be displayed in either micrograms per cubic meter (&mu;g/m^3^) or parts per billion (ppb).
+
+### Standard Measured and Modeled Data Plot
+
+The standard measured data plots in _vapintr_ are scatter plots of measured indoor and outdoor air concentrations. The scatter plot y-axis displays the measured concentration, and the x-axis identifies the date the measurement was collected. The measured data plots use different symbols to differentiate between detects and nondetects of indoor and outdoor air measurements. 
+
+The JEM simulation function in _vapintr_ does not return measured data as part of its output. As a result, measured air data must either be input manually into R or loaded in the import data template. In this example, measured tetrachloroethylene air data were loaded in the import data template along with the measured subsurface data. The imported measured data are stored in the first element of the output from `importTemplateData()`, which in this example is `imported_data_lx[[1]]`. 
+
+The code below shows how to generate a standard measured and modeled data figure using the `ModelResultFig` class. As before, the figure is generated by first creating a new instance of the class. The first five parameters passed to `ModelResultFig$new()` are the same as in the previous example, and the sixth parameter is the data frame of imported concentration data. The data in `imported_data_lx[[1]]` do not need to be filtered before passing the object to `ModelResultFig$new()`, since procedures within the class will automatically filter the data to just the measured air data for the entered contaminant CASRN before plotting. As before, calling the new object's `createStandardFigure()` function creates the standard data plot, and calling `plot(data_plot)` displays the plot image.  
+
+```{r}
+#Create a new output figure that also includes the measured air data
+model_result_figure <- ModelResultFig$new(jem_results[[1]]$JEMResults, "Tetrachloroethylene", "127-18-4", "ug/m3", "groundwater", imported_data_lx[[1]])
+
+#Generate the standard output plot showing the modeled data violin plot and the measured data scatter plot
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+The standard figure shows the measured data plot next to the modeled data plot to facilitate comparison of the measured and modeled concentrations. The standard figure will automatically format the display of the dates on the measured data plot x-axis based on the time range of the measured data. For the concentrations, the figure will modify the y-axis of the measured and modeled data plots so that they use the same range and scale. If the minimum and maximum concentrations from both datasets differ by more than one order of magnitude, the standard figure will use a log scale to display the concentrations. Otherwise, the figure will use a normal scale. The _vapintr_ package does not include a function for rendering the measured data plots by themselves.
+
+### Standard Plot with Reference Air Concentrations
+
+The standard measured data plot can include reference air concentrations which appear as horizontal lines spanning the width of the plot. The standard plot can accommodate up to four reference air concentrations per contaminant. Reference concentrations are added by passing an additional data frame when initializing the `ModelResultFig` object and can be imported using the ReferenceAirConcentrations sheet of the import data template. Imported reference air concentrations are stored in the sixth element of the output from `importTemplateData()`. If the imported data include reference air concentrations for more than one contaminant, the CASRN passed to `ModelResultFig$new()` is used to identify the values for inclusion in the figure.
+
+The example below creates a new figure with four reference air concentrations imported from the template. The first two are short- and long-term comparison values, and the last two are reference background concentrations in indoor and outdoor air. The reference data are added to the plot by passing the reference air concentration data frame in `imported_data_lx[[6]]` as the final parameter to a new `ModelResultFig` object. The new figure has the same layout as the previous figure, except that it now displays the four reference concentrations as horizontal lines in the measured data plot. The measured data plot title also changed, and the figure legend was modified to include the reference concentration legend symbols.
+
+```{r}
+#Create a new output figure that also includes the reference data
+model_result_figure <- ModelResultFig$new(jem_results[[1]]$JEMResults, "Tetrachloroethylene", "127-18-4", "ug/m3", "groundwater", imported_data_lx[[1]], imported_data_lx[[6]])
+
+#Generate the standard output plot with the modeled data next to the measured and reference air data
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+### Switching Concentration Units
+
+The previous examples displayed the measured and modeled tetrachloroethylene air concentrations in &mu;g/m^3^. To switch to ppb, use `ppb` as the fourth input parameter in the call to `ModelResultFig$new()` instead of `ug/m3`. Changing the units input into `ModelResultFig$new()` will automatically update the units for the modeled, measured, and reference concentration data. For air concentration conversions between &mu;g/m^3^ and ppb, _vapintr_ assumes a standard temperature of 25 $^\circ$C.
+
+```{r}
+#Create a new output figure that also includes the updated reference data
+model_result_figure <- ModelResultFig$new(jem_results[[1]]$JEMResults, "Tetrachloroethylene", "127-18-4", "ppb", "groundwater", imported_data_lx[[1]], imported_data_lx[[6]])
+
+#Generate the standard output plot with the modeled data next to the measured and reference air data
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+## Creating Custom Figures
+
+The structure of _vapintr_'s `ModelResultFig` class allows users to customize the standard measured and modeled data figures before they are rendered. Potential customizations that can easily be made using these objects include updating text in the figure labels, editing symbol styles, and modifying the displayed data. This section shows examples of how `ModelResultFig` objects can be modified to create custom figures. The examples in this section build on one another, such that customizations in one image will also be applied in the subsequent images.
+
+### Update the Time Range of Plotted Measured Data and the Modeled Data Axis Title
+
+The first customization example demonstrates how to modify the figure data and how to edit one of the plot titles. In this example, some of the measured air data records are removed from the measured data plot so that the time range of the measured air data matches the time range of the groundwater data used for modeling. The measured data imported at the start of the vignette include air data collected from 2003 through 2013, but only include groundwater data collected from 2010 through 2012. To make the time periods match, the first step is to remove the air data from prior to 2010 and after 2012 from the measured data used to generate the figure. The code below gets the time range in years of the imported groundwater data and creates a new data frame with only the measured air data collected within that time range.
+
+```{r}
+#Get the range in years of groundwater data used for modeling
+groundwater_data_dfx <- imported_data_lx[[1]] %>% 
+  filter(Medium == "Groundwater") %>%
+  filter(Contaminant == "Tetrachloroethylene")
+groundwater_sample_dates <- as.Date(groundwater_data_dfx$SampleDate, origin = "1900-01-01")
+groundwater_min_year = min(format(groundwater_sample_dates, "%Y"))
+groundwater_max_year = max(format(groundwater_sample_dates, "%Y"))
+
+#Filter out any data collected earlier than the minimum groundwater sample year or after the maximum groundwater sample year
+filtered_air_data <- imported_data_lx[[1]] %>% 
+  filter(Medium %in% c("Indoor Air", "Outdoor Air")) %>%
+  filter(Contaminant == "Tetrachloroethylene") %>%
+  mutate(SampleYear = format(as.Date(SampleDate, origin = "1900-01-01"), "%Y")) %>%
+  filter(SampleYear >= groundwater_min_year & SampleYear <= groundwater_max_year)
+```
+
+The next step is to update the data used to make the measured data plot. This step changes the `measured_data` attribute of the `model_result_figure$meas_data_fig` object to the new measured air data filtered by time. Recall that the `meas_data_fig` attribute in `model_result_figure` stores the `MeasDataFig` object used to create the measured data plot in the overall figure. The code also updates the modeled data plot's x-axis title so that it identifies the time range of the source groundwater data. After making these changes, the code recreates the standard layout image using `model_result_figure$createStandardFigure()` and plots the output.
+```{r}
+#Update the data in the measured and reference data plot object
+model_result_figure$meas_data_fig$measured_data <- filtered_air_data
+
+#Change the model data plot x-axis label
+model_result_figure$mod_data_fig$x_title <- paste("Modeled Using",groundwater_min_year,"\U2012",groundwater_max_year,"Groundwater Data", sep = " ")
+
+#Generate the standard output plot
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+### Modify Reference Air Concentration Line Colors
+
+The next customization changes the colors of the reference air concentration lines added to the measured data plot. Each `ConcDataFig` object, which is the parent class of the child `ModDataFig` and `MeasDataFig` objects saved in `model_result_figure$mod_data_fig` and `model_result_figure$meas_data_fig`, contains vectors that store the standard line, color, and shape styles used for the plot data. The vectors contain styles for 11 standard data factors, and each standard factor has a specific index used to retrieve its styles from the style vectors. For example, the following code shows how to obtain the index and styles for the standard "Measured Indoor Air Nondetect" factor.
+
+```{r}
+#Obtain the index associated with the standard Measured Indoor Air Nondetect factor
+factor_index <- model_result_figure$meas_data_fig$factor_indices$MeasuredIndoorAirNondetect
+
+#Print the value of the factor index and the values of the factor's standard styles
+#Measured indoor air nondetect factor index
+print(factor_index)
+
+#Factor name
+print(model_result_figure$meas_data_fig$factor_names[factor_index])
+
+#Line style format
+print(model_result_figure$meas_data_fig$factor_line_formats[factor_index])
+
+#Marker shape format
+print(model_result_figure$meas_data_fig$factor_shape_formats[factor_index])
+
+#Line and marker color format
+print(model_result_figure$meas_data_fig$factor_color_formats[factor_index])
+```
+
+The reference concentration line colors can be changed by updating their values in the `factor_color_formats` attribute of `model_result_figure$meas_data_fig`. The example below changes the colors of the long-term and short-term comparison value lines to red and purple, respectively, and changes the colors of the indoor and outdoor air background reference concentration lines to match the colors used for the indoor and outdoor air measured air data markers. After making these updates, the code recreates and plots the figure using the standard layout.
+
+```{r}
+#Get the current factor indices from the measured and reference data plot object
+factor_indices <- model_result_figure$meas_data_fig$factor_indices
+
+#Change the colors of the reference concentration factor lines
+model_result_figure$meas_data_fig$factor_color_formats[factor_indices$ReferenceConcentration1] <- "red"
+model_result_figure$meas_data_fig$factor_color_formats[factor_indices$ReferenceConcentration2] <- "purple"
+model_result_figure$meas_data_fig$factor_color_formats[factor_indices$ReferenceConcentration3] <- "blue"
+model_result_figure$meas_data_fig$factor_color_formats[factor_indices$ReferenceConcentration4] <- "orange"
+
+#Generate the standard output plot with updated line colors
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+### Edit the Standard Figure Layout
+
+The standard layouts from the `createStandardFigure()` function are intended to create images that are 6.5 inches in width and 6 inches in height. Due to the potential complexity involved, the function does not provide support for changing the size of or spacing between figure elements. If the entered data do not fit within the standard layout or if a different image size is desired, the `ConcDataFig` objects stored in `model_result_figure$mod_data_fig` and `model_result_figure$meas_data_fig` can be used to manually develop a new layout using custom sizes and element spacing.
+
+For example, suppose the names of the reference concentrations are too long to fit in the space available in the standard layout. In the code below, the names of all four reference concentrations are lengthened to provide additional clarity as to what they represent. After updating the names, calling `model_result_figure$createStandardFigure()` results in a figure where the legend elements no longer have sufficient space.
+
+```{r}
+#Get the current factor indices from the measured and reference data plot object
+factor_indices <- model_result_figure$meas_data_fig$factor_indices
+
+#Change the colors of the reference concentration factor lines
+model_result_figure$meas_data_fig$reference_data$ReferenceConcentrationName[1] <- "Lowest Long-term Air Comparison Value"
+model_result_figure$meas_data_fig$reference_data$ReferenceConcentrationName[2] <- "Lowest Short-term Air Comparison Value"
+model_result_figure$meas_data_fig$reference_data$ReferenceConcentrationName[3] <- "Indoor Air Background Reference Value"
+model_result_figure$meas_data_fig$reference_data$ReferenceConcentrationName[4] <- "Outdoor Air Background Reference Value"
+
+#Generate the standard output plot with updated line colors
+model_result_figure$createStandardFigure()
+```
+```{r, fig.width = model_result_figure$fig_width, fig.height = model_result_figure$fig_height}
+
+#Plot the violin plot figure
+plot(model_result_figure$fig_image)
+```
+
+Because the longer names do not fit in the standard image template, a new layout is needed that can accommodate the extra text. Each `ConcDataFig` object has a `data_plot` attribute that contains the ggplot of the data figure to be rendered. In addition, the `ModDataFig` and `MeasDataFig` objects each contain two additional attributes that store ggplots that can be used to configure the image legend. These ggplots are not intended to be plotted directly. Instead, the `getLegend()` function from the _vapintr_ library can be used to obtain the legend from each ggplot so that a composite legend may be assembled from all the legend elements. 
+
+The following steps demonstrate how the different elements of the existing `ConcDataFig` objects can be accessed and assembled to create a new composite image. Before arranging the elements, however, the `model_result_figure$buildPlotElements()` function must be called to build the measured and modeled data plot and legend elements that form the basis of the composite image. Normally, the `createStandardFigure()` function automatically performs this step for standard layouts. Because `createStandardFigure()` can't be used to create non-standard layouts, however, the plot elements must be built outside of that function using the `ModelResultFig` class's `buildPlotElements()` method anytime a custom layout is created. 
+
+To support the new layout that will be applied for legend, the code below also adds some extra white space to the first two reference data names. This change allows the four reference data legend entries to be arranged in a two-by-two grid with sufficient white space between the first and second column. More sophisticated methods may exist for making this change, but none were found during development of this example. At the time of this writing, the built-in method included with the ggplot2 library for adjusting the horizontal spacing between legend elements also changed the spacing between the legend element markers and names, which was not desired.
+
+```{r}
+#Add additional white space after first two reference concentration names to assist with legend formatting
+extra_white_space <- "                 "
+model_result_figure$meas_data_fig$reference_data$ReferenceConcentrationName[1] <- paste(model_result_figure$meas_data_fig$reference_data$ReferenceConcentrationName[1], extra_white_space, sep ="")
+model_result_figure$meas_data_fig$reference_data$ReferenceConcentrationName[2] <- paste(model_result_figure$meas_data_fig$reference_data$ReferenceConcentrationName[2], extra_white_space, sep ="")
+
+#Rebuild the plot elements
+model_result_figure$buildPlotElements()
+```
+
+The following code uses attributes of `model_result_figure$mod_data_fig` to build a composite legend for the violin plot image. It creates the composite legend by obtaining the legends from the ggplots stored in the `violin_plot_legend` and `percentiles_legend` attributes of the `ModDataFig` object and then arranges them into a grid with two rows and one column. 
+
+```{r}
+#Get legend for the violin plot modeled data
+
+violin_plot_legend <- getLegend(model_result_figure$mod_data_fig$violin_plot_legend +
+                                 theme(legend.background = element_rect(fill = 'transparent'),
+                                       legend.text = element_text(margin = margin(l = 20)),
+                                       legend.position = c(0.08, 0.30), 
+                                       legend.justification = c(0, 0)))
+
+#Get legend for the 50th and 95th percentile modeled concentration lines
+percentiles_legend <- getLegend(model_result_figure$mod_data_fig$percentiles_legend +
+                                 theme(legend.background = element_rect(fill = 'transparent'),
+                                       legend.text = element_text(margin = margin(l = 20)),
+                                       legend.position = c(0.08, 0.43), 
+                                       legend.justification = c(0, 0)))
+
+#Combine the violin plot legend elements into a single grid element
+combined_violin_plot_legend <- plot_grid(violin_plot_legend, percentiles_legend, nrow = 2, ncol=1)
+```
+
+In the next step, the code creates a new composite legend using the legend made in the previous code along with legends derived from the ggplots in the `measured_data_legend` and `reference_data_legend` attributes of the `MeasDataFig` object saved in `model_result_figure$meas_data_fig`. All of the formatting, position and spacing properties assigned to the various legend elements were selected in an *ad hoc* manner to make the composite legend fit in the final figure.
+
+```{r}
+#Get the legend for the measured data points
+measured_data_legend <- getLegend(model_result_figure$meas_data_fig$measured_data_legend +
+                                   theme(legend.background = element_rect(fill = 'transparent'),
+                                         legend.text = element_text(margin = margin(l = 20)),
+                                         legend.position = c(0.09, 0.22), 
+                                         legend.justification = c(0, 0)))
+
+#Combine the measured data legend with the violin plot legend
+full_plot_legend <- plot_grid(combined_violin_plot_legend, 
+                              measured_data_legend, nrow = 1, ncol = 2)
+
+#Get the legend for the reference concentration lines
+reference_data_legend <- getLegend(model_result_figure$meas_data_fig$reference_data_legend +
+                                    guides(shape=guide_legend(nrow=2,byrow =FALSE),
+                                           color=guide_legend(nrow=2,byrow =FALSE)) +                             
+                                    theme(legend.background = element_rect(fill = 'transparent'), 
+                                          legend.text = element_text(margin = margin(l = 10)),
+                                          legend.position = c(0.022, 0.55), 
+                                          legend.justification = c(0, 0)))
+
+#Assemble the separate legend elements into a single element
+full_plot_legend <- plot_grid(full_plot_legend, reference_data_legend, nrow = 2, ncol = 1, rel_heights = c(1, 0.4))
+```
+
+In the next step, the measured and modeled data plots stored in `model_result_figure$meas_data_fig$data_plot` and `model_result_figure$mod_data_fig$data_plot` are combined into a single plot grid with one row and two columns. As in the standard layout, the modeled data plot will appear to the left and the measured data plot will appear to the right.
+
+```{r}
+#Assemble the modeled and measured data plots into a single element
+plot_images <- plot_grid(model_result_figure$mod_data_fig$data_plot, model_result_figure$meas_data_fig$data_plot, nrow = 1, ncol = 2)
+```
+
+The final step puts the composite legend beneath the composite plot image. 
+
+``` {r, fig.width = 6.5, fig.height = 6}
+#Assemble the combined plots and legends into a single image
+data_plot <- plot_grid(plot_images, full_plot_legend, nrow = 2, rel_heights = c(1,0.42))
+
+#Plot the composite image
+plot(data_plot)
+```
+
+### Add and Customize the Figure's Footnote
+
+In the example above, the standard footnotes explaining the symbol definitions and the violin plot are missing from the bottom of the composite image. The footnote text is normally added within the `createStandardFigure()` function, so it must be added manually whenever that function is not used. The following code adds that information to the figure, along with an additional message stating that limits of quantitation were used to plot the measured nondetects. For the second line of the footnote, the code uses `draw_plot_label()` instead of `draw_label()` to write the text so that the special characters (Greek letters, etc.) in the footnote will display correctly.
+
+```{r, fig.width = 6.5, fig.height = 6.5}
+#Write the message for the first line of the footnote
+first_footnote_line <- "Wider sections of the violin plot (light blue area) represent a higher probability of model-predicted indoor air concentrations."
+
+#Add the first line of the footnote to the output figure
+data_plot <- data_plot + draw_label(first_footnote_line, x= 0.03, y = 0.043, hjust = 0, size = 8)
+
+#Build the second line of the footnote. 
+second_footnote_line <- "Nondetects~are~plotted~at~their~limits~of~quantitation.~"
+second_footnote_line <- paste(second_footnote_line, if_else(model_result_figure$concentration_units == "ppb", "ppb~`=`~parts~per~billion", "mu*g/m^3~`=`~micrograms~per~cubic~meter"), "*`;`~", sep="")
+second_footnote_line <- paste(second_footnote_line, "italic(P)[95]~`=`~95^th~percentile*`;`~", sep="")
+second_footnote_line <- paste(second_footnote_line, "italic(P)[50]~`=`~50^th~percentile", sep="")
+
+#Add the second line of the footnote to the output figure
+data_plot <- data_plot + draw_plot_label(second_footnote_line, x = 0.03, y = 0.04, hjust = 0, size = 8, parse = TRUE)
+
+#Plot the updated figure
+plot(data_plot)
+```
+
+### Update and Add New Data Factors for Measured Data
+
+The final customization included in this vignette shows how to add additional factors to the measured data plot to further distinguish between different types of measured data. For this example, suppose that all of the air samples collected in 2010 in the imported dataset were short-term grab samples rather than longer-term time integrated samples. To distinguish the grab sample records from the other records already shown in the measured air data plot, new data factors can be created and assigned to the 2010 grab sample records. 
+
+The first step in this process is to update the data frame stored in `model_result_figure$meas_data_fig$measured_data` with information needed to generate the new factors. The new factors will have the same name as the old factors, but will have the phrase " (Grab)" appended at the end of the factor name to distinguish the data as grab samples. Factors for measured data points are assigned based on the value of the `DataType` field in the `model_result_figure$meas_data_fig$measured_data` data frame. 
+
+```{r}
+#Assign grab sample flag to 2010 data and build new data type flag
+filtered_air_data <- filtered_air_data %>%
+  mutate(IsGrabSample = if_else(SampleYear == 2010, TRUE, FALSE))
+
+#Assemble new DataType column with updated text for new factors
+detectText <- ifelse(filtered_air_data$DetectedFlag == FALSE, " Nondetect", ifelse (filtered_air_data$DetectedFlag == TRUE, " Detect", NA))
+grabText <- ifelse(filtered_air_data$IsGrabSample == FALSE, "", ifelse (filtered_air_data$IsGrabSample == TRUE, " (Grab)", NA))
+filtered_air_data$DataType <- paste("Measured ", filtered_air_data$Medium, detectText, grabText, sep="")
+
+#Assign the new measured data with updated DataType column to the output figure object
+model_result_figure$meas_data_fig$measured_data <- filtered_air_data
+```
+
+The previous steps updated the value of the `model_result_figure$meas_data_fig$measured_data` data frame's `DataType` field but did not convert the data in the field to factors. The conversion to factors occurs as a step in `model_result_figure$buildPlotElements()` using factor names stored in the `model_result_figure$meas_data_fig` object's `factor_names` attribute. For the conversion to occur correctly, the names of the new factors must be added to the `factor_names` vector of the `model_result_figure$meas_data_fig` object. The code below first creates indices for the new factors in the object's `factor_indices` vector and then updates the `factor_names` vector with the new factor names.
+
+
+```{r}
+#Add new factor indices to existing factor index list
+model_result_figure$meas_data_fig$factor_indices <- 
+  append(model_result_figure$meas_data_fig$factor_indices, 
+                         list(
+                           MeasuredIndoorAirDetectGrab = 12,
+                           MeasuredOutdoorAirDetectGrab = 13,
+                           MeasuredIndoorAirNondetectGrab = 14,
+                           MeasuredOutdoorAirNondetectGrab = 15
+                         ))
+
+#Store new factor indices to a different variable to save space in writing them out in the next few lines
+factor_indices <- model_result_figure$meas_data_fig$factor_indices
+
+#Assign names for the new factors
+model_result_figure$meas_data_fig$factor_names[factor_indices$MeasuredIndoorAirDetectGrab] <- "Measured Indoor Air Detect (Grab)"
+model_result_figure$meas_data_fig$factor_names[factor_indices$MeasuredOutdoorAirDetectGrab] <- "Measured Outdoor Air Detect (Grab)"
+model_result_figure$meas_data_fig$factor_names[factor_indices$MeasuredIndoorAirNondetectGrab] <- "Measured Indoor Air Nondetect (Grab)"
+model_result_figure$meas_data_fig$factor_names[factor_indices$MeasuredOutdoorAirNondetectGrab] <- "Measured Outdoor Air Nondetect (Grab)"
+```
+
+The next step is to assign the symbols that the new factors will use. The following code assigns the same line and color formatting for the grab sample records as for the standard records but substitutes new marker formats to identify them as grab samples. The grab sample markers continue to use circles for indoor air records and squares for outdoor air records, but they also include a "+" (for detects) or "x" (for nondetects) in the middle of each marker. Once the new symbols are assigned, the plot elements are rebuilt by calling  `model_result_figure$buildPlotElements()`.
+
+```{r}
+#Assign line formatting for the new grab sample factors
+model_result_figure$meas_data_fig$factor_line_formats[factor_indices$MeasuredIndoorAirDetectGrab] <- "blank"
+model_result_figure$meas_data_fig$factor_line_formats[factor_indices$MeasuredOutdoorAirDetectGrab] <- "blank"
+model_result_figure$meas_data_fig$factor_line_formats[factor_indices$MeasuredIndoorAirNondetectGrab] <- "blank"
+model_result_figure$meas_data_fig$factor_line_formats[factor_indices$MeasuredOutdoorAirNondetectGrab] <- "blank"
+
+#Assign color formatting for the new grab sample factors
+model_result_figure$meas_data_fig$factor_color_formats[factor_indices$MeasuredIndoorAirDetectGrab] <- "blue"
+model_result_figure$meas_data_fig$factor_color_formats[factor_indices$MeasuredOutdoorAirDetectGrab] <- "orange"
+model_result_figure$meas_data_fig$factor_color_formats[factor_indices$MeasuredIndoorAirNondetectGrab] <- "blue"
+model_result_figure$meas_data_fig$factor_color_formats[factor_indices$MeasuredOutdoorAirNondetectGrab] <- "orange"
+
+#Assign marker formatting for the new grab sample factors
+model_result_figure$meas_data_fig$factor_shape_formats[factor_indices$MeasuredIndoorAirDetectGrab] <- 10 # circle with +
+model_result_figure$meas_data_fig$factor_shape_formats[factor_indices$MeasuredOutdoorAirDetectGrab] <- 12 # square with +
+model_result_figure$meas_data_fig$factor_shape_formats[factor_indices$MeasuredIndoorAirNondetectGrab] <- 13 # circle with x
+model_result_figure$meas_data_fig$factor_shape_formats[factor_indices$MeasuredOutdoorAirNondetectGrab] <- 7 # square with x
+
+#Rebuild plot object elements
+model_result_figure$buildPlotElements()
+```
+
+The final step is to reassemble the composite figure. The four new factors will need to be added to the figure legend, so the layout must be modified to accommodate them. In the first reassembly step, the code generates a combined legend for the violin plot using the legend elements stored in `model_result_figure$mod_data_fig`. 
+
+```{r}
+#Get legend for the violin plot modeled data
+violin_plot_legend <- getLegend(model_result_figure$mod_data_fig$violin_plot_legend +
+                                     theme(legend.background = element_rect(fill = 'transparent'), 
+                                           legend.position = c(-0.01, 0.27), 
+                                           legend.justification = c(0, 0)))
+
+#Get legend for the 50th and 95th percentile modeled concentration lines
+percentiles_legend <- getLegend(model_result_figure$mod_data_fig$percentiles_legend +
+                                     theme(legend.background = element_rect(fill = 'transparent'), 
+                                           legend.position = c(-0.01, 0.15), legend.justification = c(0, 0)))
+
+#Combine the violin plot legend elements into a single grid element
+combined_violin_plot_legend <- plot_grid(violin_plot_legend, percentiles_legend, nrow = 2, ncol=1)
+```
+
+In the next step, the code assembles the full plot legend. As in the previous example, the formatting, position, and spacing properties assigned to the various legend elements were selected in an *ad hoc* manner to make the composite legend fit in the final figure.
+
+```{r}
+#Get the legend for the measured data points
+measured_data_legend <- getLegend(model_result_figure$meas_data_fig$measured_data_legend +
+                                   guides(shape=guide_legend(nrow=4,byrow =FALSE),
+                                          color=guide_legend(nrow=4,byrow =FALSE)) +
+                                   theme(legend.background = element_rect(fill = 'transparent'), 
+                                         legend.position = c(0, 0.05), legend.justification = c(0, 0)))
+
+#Get the legend for the reference concentration lines
+reference_data_legend <- getLegend(model_result_figure$meas_data_fig$reference_data_legend +
+                                    guides(line=guide_legend(nrow=2,byrow =FALSE),
+                                    color=guide_legend(nrow=2,byrow =FALSE)) +
+                                    theme(legend.background = element_rect(fill = 'transparent'), 
+                                          legend.position = c(0.04, 0), legend.justification = c(0, 0)))
+
+#Assemble the separate legend elements into a single element
+full_plot_legend <- plot_grid(combined_violin_plot_legend, measured_data_legend, nrow = 1, ncol = 2, rel_widths = c(0.46, 1))
+full_plot_legend <- plot_grid(full_plot_legend, reference_data_legend, nrow = 2, ncol = 1, rel_heights = c(1, 0.4))
+```
+
+In the final steps, the plot images are assembled along with the combined legend, and the figure footnotes are added back into the composite image.
+
+```{r, fig.width = 6.5, fig.height = 6}
+#Assemble the modeled and measured data plots into a single element
+plot_images <- plot_grid(model_result_figure$mod_data_fig$data_plot, model_result_figure$meas_data_fig$data_plot, nrow = 1, ncol = 2)
+
+#Assemble the combined images and legends into a single image
+data_plot <- plot_grid(plot_images, full_plot_legend, nrow = 3, rel_heights = c(1,0.35, 0.07))
+
+#Add the footnote lines to the composite image
+data_plot <- data_plot + draw_label(first_footnote_line, x= 0.03, y = 0.043, hjust = 0, size = 8)
+data_plot <- data_plot + draw_plot_label(second_footnote_line, x = 0.03, y = 0.04, hjust = 0, size = 8, parse = TRUE)
+
+#Plot the composite image
+plot(data_plot)
+```
+

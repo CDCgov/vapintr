@@ -1,0 +1,277 @@
+---
+title: "Conceptual Site Model and Soil Strata Figures"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{4_Conceptual Site Model and Soil Strata Figures}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.align = "center"
+)
+```
+
+## Introduction
+
+The _vapintr_ package includes built-in methods for generating two types of figures to visualize Johnson and Ettinger Model (JEM) scenarios. The first type displays a conceptual site model of the building and subsurface that shows parameters considered within the JEM, and the second type displays the soil strata profiles that characterize the site. The following code loads the _vapintr_ package and other packages used to manipulate data and create figures within this vignette. 
+
+```{r setup, warning = FALSE, message = FALSE}
+library(vapintr)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+```
+
+This vignette explains how to create the conceptual site model and soil strata profile images using an example dataset included with _vapintr_. The example dataset is saved in a copy of the _vapintr_ data import template named `Vignette_data.xlsx`, which the code below retrieves and imports. To view the data file, run the command `shell.exec(file = system.file("extdata", "Vignette_data.xlsx", package = "vapintr"))`.
+
+```{r}
+#Get file path of data to import
+vignette_data_file_path <- system.file("extdata", "Vignette_data.xlsx", package = "vapintr")
+
+#Import data to a new list object that can be run within vapintr
+imported_data_lx <- importTemplateData(vignette_data_file_path)
+```
+
+## Creating Conceptual Site Model Figures
+The `importTemplateData()` function processes data in the import template and converts it into the form required by _vapintr_'s `runJE()` function, which is the main function within _vapintr_ for running the JEM. In the list output from `importTemplateData()`, simulation settings are saved in a data frame stored in the fifth list element. This data frame contains all the information needed to generate the conceptual site model figures. 
+
+```{r}
+#Write the imported settings data to a new data frame for use in the document examples
+settings_data_dfx <- imported_data_lx[[5]]
+```
+
+### Imported Data Conceptual Site Model
+
+The custom `SiteModelFig` class in _vapintr_ generates conceptual site model images from the simulation settings data. The constructor for the class accepts the settings data output from `importTemplateData()` as its only input.
+
+```{r}
+#Create a new SiteModelFig object using the imported settings data
+site_model_figure <- SiteModelFig$new(settings_data_dfx)
+```
+
+To generate the conceptual site model figure, first call the object's `createStandardFigure()` function. This function builds a ggplot of the conceptual site model, stores it in the object's `fig_image` property, and assigns a recommended width and height to the object's `fig_width` and `fig_height` properties. The `SiteModelFig` class inherits these properties from the parent `StandardOutputFig` class, which _vapintr_ uses to create standard output figures at the correct size. The conceptual site model images are intended to have a length of 6.5 inches and a height of 6 inches. Calling `plot(site_model_figure$fig_image)` displays the figure. 
+
+```{r}
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+The imported dataset contains JEM inputs for a simulation of a groundwater source beneath a house that has a basement with slab foundation. The dataset's conceptual site model shows a simplified outline of the house and displays the basement side walls and foundation slab. Beneath the building, the image shows the groundwater source zone and capillary zone. Contaminants volatilize from the groundwater and diffuse upwards through the capillary zone into the unsaturated zone, where they continue to diffuse upward in soil gas. When they arrive at the building foundation, contaminants enter the building via advection and diffusion through the basement slab and walls. They are assumed to mix evenly within the building and are removed from the building through air exchange with the outdoors.
+
+The conceptual site model includes symbols for the building and subsurface source parameters used in the model equations. H<sub>b</sub> and ach are the enclosed space mixing height (in meters) and the indoor air exchange rate (hour<sup>-1</sup>), and A<sub>bf</sub> and eta represent the enclosed space floor area (meters<sup>2</sup>) and the fraction of the foundation area with cracks (unitless). Q<sub>soil</sub> is the subsurface flowrate of soil gas into the building (meters<sup>3</sup>/hour), and Q<sub>b</sub> is the ventilation rate of air to the outdoors (meters<sup>3</sup>/hour). In _vapintr_'s data import template, these variables are combined into a single variable, Q<sub>soil</sub>\_Q<sub>b</sub>, which is defined as the ratio of Q<sub>soil</sub> divided by Q<sub>b</sub>.
+
+Towards the image's left side, L<sub>b</sub> represents the depth from ground surface to the bottom of the foundation, and L<sub>f</sub> is the foundation thickness. For groundwater simulations, L<sub>s</sub> represents the depth from ground surface to the top of the water table, and T<sub>s</sub> is the average groundwater temperature. The conceptual site model does not show any chemical parameters used in the model, nor does it show how soil strata are defined. Soil strata logs can be generated using a different _vapintr_ function, as explained in the "Creating Soil Strata Figures" section of this vignette. 
+
+### Source Medium and Capillary Zone 
+
+The settings data frame contains four variables that _vapintr_ uses to generate the conceptual site model figure: `source_medium`, `building_setting`, `foundation_type`, and `simulate_capillary_zone`. The `SiteModelFig` class can create standard conceptual site model images for all the potential permutations of these variables in _vapintr_. 
+
+In groundwater simulations, the `simulate_capillary_zone` variable can have a value of either `TRUE` or `FALSE.` If set to `TRUE`, as it was in the imported dataset, _vapintr_ evaluates contaminant diffusion through the capillary zone and uses soil strata properties to determine the capillary zone height and the contaminant's effective diffusivity through the capillary zone. If set to `FALSE`, _vapintr_ does not perform the capillary zone calculations, but instead divides the equilibrium soil gas concentration for the groundwater source by a factor of 10, following the procedure in the BioVapor model [GSI 2012]. As a result, the conceptual site model image does not include the capillary zone when `simulate_capillary_zone` is set to `FALSE`. 
+
+```{r}
+#Turn off the setting to simulate the capillary zone
+settings_data_dfx$simulate_capillary_zone <- FALSE
+
+#Create the SiteModelFig object
+site_model_figure <- SiteModelFig$new(settings_data_dfx)
+
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+Three different options are available for the simulation source medium: "Groundwater", which was used in the imported dataset, "Exterior Soil Gas", and "Subslab Soil Gas". Examples of the conceptual site models for the two soil gas options are shown in the images that follow. 
+
+```{r}
+#Assign exterior soil gas as the source medium
+settings_data_dfx$source_medium <- "Exterior Soil Gas"
+
+#Create the SiteModelFig object
+site_model_figure <- SiteModelFig$new(settings_data_dfx)
+
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+```{r}
+#Assign subslab soil gas as the source medium
+settings_data_dfx$source_medium <- "Subslab Soil Gas"
+
+#Create the SiteModelFig object
+site_model_figure <- SiteModelFig$new(settings_data_dfx)
+
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+In both the subslab and exterior soil gas conceptual site models, the exact source of the contaminant is unspecified and can be either groundwater or another source in the unsaturated zone, such as contaminated soil or buried leaking containers. Both of the soil gas models assume that the JEM's contaminant concentration input comes from a soil gas sample measurement. Because groundwater is not considered, _vapintr_ ignores the `simulate_capillary_zone` variable in soil gas simulations.
+
+Subslab soil gas simulations can be performed for any samples collected within one meter of the building foundation's bottom depth. Beyond that depth, the source medium should be entered as exterior soil gas, even if the sample was collected from beneath the building footprint. For both exterior and subslab soil gas, L<sub>s</sub> represents the depth from ground surface to the soil gas sample location, and T<sub>s</sub> is the average temperature in the vadose zone.
+
+### Building Setting and Foundation Type
+
+JEM simulations in _vapintr_ support two options for the `building_setting` parameter and five options for the `foundation_type` parameter. The allowable `building_setting` values are "Residential" and "Commercial". The selected `building_setting` affects the default building parameters assigned in _vapintr_ and the anticipated ranges of those parameters, but it does not impact the model's governing equations. The five types of building foundations supported are  "Slab-on-grade", "Basement w/ Slab", "Basement w/ Dirt Floor", "Closed Crawl Space w/ Slab", and "Closed Crawl Space w/ Dirt Floor", as specified in _vapintr_'s data import template. The `importTemplateData()` function maps these foundation types to simplified `foundation_type` codes, which are used in `runJE()` and in the creation of the conceptual site model images. The mappings assigned by `importTemplateData()` are as follows, with the foundation type from the data import template on the left mapped to the `foundation_type` code on the right.
+
+* "Slab-on-grade" -> "Slab-grade"
+* "Basement w/ Slab" -> "Basement-slab"
+* "Basement w/ Dirt Floor" -> "Basement-dirt"
+* "Closed Crawl Space w/ Slab" -> "Crawlspace-slab"
+* "Closed Crawl Space w/ Dirt Floor" -> "Crawlspace-dirt"
+
+Residential simulations support all five foundation types, but commercial simulations support only the slab-on-grade, basement with slab, and basement with dirt floor foundation types. Commercial building simulations cannot be run using either of the crawlspace foundation types. 
+
+The following images show two additional examples of the building and foundation types that _vapintr_ supports. The first image shows a residential building that has a closed crawl space with dirt floor foundation, and the second shows a commercial building that has a slab-on-grade foundation. For buildings with dirt floor foundations, the foundation thickness parameter L<sub>f</sub> is assumed to be zero, and the fraction of the floor space with cracks (eta) has a default value of one. For slab-on-grade foundations, the default values of the foundation thickness (L<sub>f</sub>) and the depth below grade to the base of the foundation (L<sub>b</sub>) are the same.
+
+```{r}
+#Reset the simulation type to a groundwater source with the capillary zone simulated
+settings_data_dfx$source_medium <- "Groundwater"
+settings_data_dfx$simulate_capillary_zone <- TRUE
+
+#Assign the building setting and foundation type
+settings_data_dfx$building_setting <- "Residential"
+settings_data_dfx$foundation_type <- "Crawlspace-dirt"
+
+#Create the SiteModelFig object
+site_model_figure <- SiteModelFig$new(settings_data_dfx)
+
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+```{r}
+#Assign the building setting and foundation type
+settings_data_dfx$building_setting <- "Commercial"
+settings_data_dfx$foundation_type <- "Slab-grade"
+
+#Create the SiteModelFig object
+site_model_figure <- SiteModelFig$new(settings_data_dfx)
+
+#Create the standard image using the SiteModelFig object
+site_model_figure$createStandardFigure()
+```
+```{r, fig.width = site_model_figure$fig_width, fig.height = site_model_figure$fig_height}
+#Plot the standard image
+plot(site_model_figure$fig_image)
+```
+
+## Creating Soil Strata Figures
+
+This section shows how to generate _vapintr_'s soil strata figures using the same dataset imported previously. The list object output from `importTemplateData()` stores strata log data in the fourth list element. 
+
+```{r}
+strata_logs_dfx <- imported_data_lx[[4]]
+```
+
+### Standard Soil Strata Figure
+
+The _vapintr_ package uses the custom `StrataProfileFig` class to create soil strata figures. The class constructor accepts the strata data output from `importTemplateData()` as its only input. 
+
+```{r}
+#Create a new strata profile figure object
+strata_figure <- StrataProfileFig$new(strata_logs_dfx)
+```
+
+Once a `StrataProfileFig` object is created, calling the object's `createStandardFigure()` function generates the soil strata figure. The function creates a combined plot with a strata log for each distinct `LogID` in the imported data. It saves the image in the `StrataProfileFig` object's `fig_image` property and saves the intended width and length of the figure in the object's `fig_width` and `fig_height` properties. Calling `plot(strata_figure$fig_image)` displays the soil strata image.
+
+```{r}
+#Generate the standard soil strata figure
+strata_figure$createStandardFigure()
+```
+```{r, fig.width = strata_figure$fig_width, fig.height = strata_figure$fig_height}
+#Plot the soil strata figure
+plot(strata_figure$fig_image)
+```
+
+The soil strata image identifies the United States Department of Agriculture (USDA) Soil Conservation Service (SCS) soil types assigned in each strata log. The figure legend identifies the pattern associated with each SCS soil type and always includes all 12 SCS soil types, regardless of the imported soil types in the site data. In each log, strata are ordered according to the values entered in the log's `LayerOrder` field, and strata thicknesses are shown in meters. The program automatically scales the y-axis for all of the logs to reflect the maximum depth of any of the plotted logs. 
+
+### Standard Figure Size and Orientation
+
+The standard size of the `StrataProfileFig` images will depend on the number of logs to be plotted. For 1 to 3 logs, the image is designed to fit without rescaling into a standard document with a "portrait" page layout orientation. The standard height is 8.5 inches, and the standard width is 1.6 inches for each log, plus an additional 1.6 inches for the figure legend. For 4 or 5 logs, the image fits without rescaling in a standard document with a "landscape" orientation. The standard height is 6 inches, and the standard width is 1.5 inches for each log plus an additional 1.5 inches for the figure legend. 
+
+The `createStandardFigure()` function has an optional input parameter, `plot_orientation`, that controls the dimensions of the final image. Using the parameter's standard value of `"default"` will orient the final image according to the rules identified in the previous paragraph. However, plots of 1 to 3 logs can be generated in landscape orientation by setting `plot_orientation = "landscape"`, and plots of more than four logs can be generated in portrait orientation by setting `plot_orientation = "portrait"`. The example below recreates the previous image in portrait orientation and generates the image.
+
+```{r}
+#Generate the standard soil strata figure in portrait orientation
+strata_figure$createStandardFigure(plot_orientation = "portrait")
+```
+```{r, fig.width = strata_figure$fig_width, fig.height = strata_figure$fig_height}
+#Plot the soil strata figure
+plot(strata_figure$fig_image)
+```
+
+### Plotting 6 or More Logs
+
+The standard soil strata image can include 6 or more logs, but the resulting image may not display well in documents since each additional log will extend the standard image size by 1.5 inches. For sites with 6 or more logs, subdividing the logs into two or more soil strata plots is recommended. The strata logs data frame can be subdivided using the `LogID` field, as shown in the example below. In this example, two logs are added to `strata_logs_dfx` so that it includes data for six logs, and the data frame is then subdivided into two groups of three logs each for plotting, with the logs placed in numerical order. Logs will appear in the strata figure in the order that they occur in the data frame.
+
+```{r}
+#Add data for two logs to strata_logs_dfx
+MW12A <- data.frame(
+ LogID = c('MW12A', 'MW12A', 'MW12A'),
+ LayerOrder = c(1, 2, 3),
+ Thickness = c(2, 4, 5),
+ Units = c("m", "m", "m"),
+ SoilType = c("Loamy Sand", "Sandy Loam", "Sand"))
+ 
+MW41B <- data.frame(
+ LogID = c('MW41B', 'MW41B', 'MW41B', 'MW41B'),
+ LayerOrder = c(1, 2, 3, 4),
+ Thickness = c(1.5, 4.5, 2, 4),
+ Units = c("m", "m", "m", "m"),
+ SoilType = c("Loamy Sand", "Sandy Loam", "Silt", "Silt Loam") 
+)
+
+strata_logs_dfx <- rbind(strata_logs_dfx, MW12A, MW41B)
+
+#Divide logs into two groups
+group_A_logs <- strata_logs_dfx %>% filter(LogID == "MW15A" | LogID == "MW24A" | LogID == "MW12A") %>%
+  arrange(LogID, LayerOrder)
+
+group_B_logs <- strata_logs_dfx %>% filter(LogID == "MW29B" | LogID == "MW38B" | LogID == "MW41B") %>%
+  arrange(LogID, LayerOrder)
+
+#Create soil strata figure objects
+group_A_strata_figure <- StrataProfileFig$new(group_A_logs)
+
+group_B_strata_figure <- StrataProfileFig$new(group_B_logs)
+
+#Generate the soil strata figures 
+group_A_strata_figure$createStandardFigure()
+
+group_B_strata_figure$createStandardFigure()
+
+```
+```{r, fig.width = group_A_strata_figure$fig_width, fig.height = group_A_strata_figure$fig_height}
+#Plot the group A soil strata figure 
+plot(group_A_strata_figure$fig_image)
+```
+```{r, fig.width = group_B_strata_figure$fig_width, fig.height = group_B_strata_figure$fig_height}
+#Plot the Group B soil strata figure
+plot(group_B_strata_figure$fig_image)
+```
+
+## References
+
+[GSI] GSI Environmental Inc. 2012. User's manual---BioVapor: a 1-D vapor intrusion model with oxygen-limited aerobic biodegradation. American Petroleum Institute (API) Houston, Texas. November 2012.

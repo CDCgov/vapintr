@@ -63,10 +63,10 @@ If there’s any question on whether information may be sensitive (such as detai
 
 ## Enforcement
 
-Users looking to use GitHub  that are unable to follow these rules of behavior will not have authorization to do so. Any users that violate these rules of behavior or CDC security policies may be subject to action, up to and including revoking access to GitHub. Technical and security stewards have the right to enforce these rules of behavior based on violations at any time.
+Users looking to use GitHub that are unable to follow these rules of behavior will not have authorization to do so. Any users that violate these rules of behavior or CDC security policies may be subject to action, up to and including revoking access to GitHub. Technical and security stewards have the right to enforce these rules of behavior based on violations at any time.
 
 ## References
 
-* [Policy for Managing the Use of Third-Party Websites and Applications](https://www.hhs.gov/about/agencies/asa/ocio/cybersecurity/policy-social-media-technologies/index.html)
+* [Policy for Managing the Use of Third-Party Websites and Applications](http://www.hhs.gov/ocio/policy/policy2013_0001.html)
 * [Rules of Behavior for Use of HHS Information Resources](http://www.hhs.gov/ocio/policy/hhs-rob.html)
-* [Security and Awareness Training](http://sat.cdc.gov/) (requires login)
+* [Security and Awareness Training](http://sat.cdc.gov/)
